@@ -20,6 +20,10 @@ jobs:
     name: gitleaks
     runs-on: ubuntu-latest
     steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit  # log egress; flip to `block` once baseline is known
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
