@@ -141,36 +141,57 @@ Workflows that benefit from this pattern: `actionlint`, `bandit`, `trivy`, `pip-
 
 ## 5. Dependabot operations
 
-### 5.1 Why grouping matters
-Without grouping, enabling Dependabot on a repo with N outdated deps produces N separate PRs. With the template's grouping config:
-- All security updates → 1 grouped PR per ecosystem per week
-- All minor/patch version updates → 1 grouped PR per ecosystem per week
-- Major updates → individual PRs (deserve individual review)
+### 5.1 The "FULL grouping" pattern (default)
+This template's `dependabot.yml` ships with **two groups per ecosystem**:
 
-This is the answer to "Dependabot burst." See [scar in CLAUDE.md](#) — burst from `dependabot.yml` on aged repos.
-
-### 5.2 Enabling on a stale repo
-```yaml
-# In .github/dependabot.yml — set low limit initially
-open-pull-requests-limit: 1
-```
-Bump to 5+ once the initial burst is triaged.
-
-### 5.3 Security vs. version updates
-| Type | Trigger | Throttling |
+| Group | Catches | Why separate |
 |---|---|---|
-| Security updates | Vulnerability detected | Cannot be throttled by `open-pull-requests-limit`; grouping helps |
-| Version updates | Outdated version | Throttled by `open-pull-requests-limit` |
+| `<ecosystem>-security` | All vulnerability fixes | Urgent — needs prioritized review |
+| `<ecosystem>-versions` | All version bumps INCLUDING majors | Routine — single weekly digest |
 
-### 5.4 Triage runbook for security PRs
+**Result**: maximum 2 PRs per ecosystem per week, regardless of how many deps are stale. Burst-proof.
+
+**Trade-off**: a grouped `<ecosystem>-versions` PR may bundle a major-version upgrade with several minor/patch upgrades. The reviewer must glance at each embedded changelog rather than triage by PR title. For solo-dev / personal repos this is the right call. For larger teams that want per-major reviews, use the alternative pattern below.
+
+### 5.2 Alternative: "majors stay individual" pattern
+If you want major-version PRs to remain individual (so each major's changelog gets its own review thread), use a 3-group config:
+```yaml
+groups:
+  pip-security:
+    applies-to: security-updates
+    patterns: ["*"]
+  pip-minor-patch:
+    applies-to: version-updates
+    update-types: ["minor", "patch"]
+  # Majors NOT in any group → individual PRs
+```
+This was the template's earlier default but was changed because solo-dev review cadence didn't justify the per-major PR overhead.
+
+### 5.3 Hard cap: `open-pull-requests-limit: 2`
+Independent of grouping, this caps the total open Dependabot PRs per ecosystem at 2. Protects against config drift if grouping breaks. Bump to 5 once you've cleared any backlog and want faster turnover.
+
+### 5.4 Why initial bursts can still happen
+The grouping config applies to **future scheduled scans**, not retroactively to deps that were already individually queued before the config landed. First-scan-after-enabling on an aged repo can produce a one-time burst of individual PRs. **Mitigation**:
+- Set `open-pull-requests-limit: 1` on first activation
+- Bump back to 2 after the initial backlog is cleared
+- Dormant repos: archive instead of patching
+
+### 5.5 Security vs. version updates
+| Type | Trigger | Throttling | Grouping behavior |
+|---|---|---|---|
+| Security updates | Known vulnerability | Honors `open-pull-requests-limit` (per ecosystem) | Use `applies-to: security-updates` |
+| Version updates | Outdated version | Honors `open-pull-requests-limit` | Use `applies-to: version-updates` |
+
+### 5.6 Triage runbook for grouped security PRs
 1. Filter PRs: `is:pr label:dependencies is:open`
-2. Sort by severity (Dependabot tags critical/high in PR body)
-3. For each PR:
-   - Check CI status; if green, the upgrade is API-compatible
-   - Glance at the changelog (Dependabot embeds it)
-   - Watch for: behavioral changes, new dependencies, license changes
-   - Merge if no red flags
-4. For critical-severity PRs only: read the linked CVE, verify the affected feature is actually used in your code
+2. Open the `<ecosystem>-security` PR (highest priority)
+3. Verify CI passes (means upgrades are API-compatible)
+4. Skim each embedded changelog for behavioral / API / license changes
+5. For **critical-severity** deps specifically: read the linked CVE, verify the affected feature is actually used in this code
+6. Merge if no red flags
+
+### 5.7 The deeper truth
+Dependabot is **noisy on first activation against any repo with deferred dep maintenance**. The fundamental fix is to keep deps fresh: daily/weekly merging of small upgrades = no burst ever happens because there's never a backlog to clear.
 
 ---
 
