@@ -1,18 +1,20 @@
 version: 2
 
-# FULL grouping baseline — every Dependabot update lands as a grouped PR,
-# never an individual PR. Two groups per ecosystem:
-#   1. <ecosystem>-security  → all vulnerability fixes
-#   2. <ecosystem>-versions  → all version bumps including majors
+# Default pattern: 3-group (security + minor-patch + majors-individual).
+#   1. <eco>-security    → all vulnerability fixes (urgent)
+#   2. <eco>-minor-patch → safe semver bumps grouped together
+#   3. (majors stay individual — breaking changes get isolated review;
+#      a v6→v7 upgrade can't take down a grouped PR's CI and block
+#      safe patches inside it)
 #
-# This is "true weekly digest" mode — burst-proof regardless of how
-# many deps are stale when you enable Dependabot. Trade-off: major-version
-# diffs share a PR with minor/patch (review each embedded changelog).
+# `open-pull-requests-limit: 2` is a HARD CAP. If grouping ever permits
+# more than 2 PRs per ecosystem, the limit kicks in.
 #
-# `open-pull-requests-limit: 2` is a hard cap independent of grouping —
-# protects against config drift.
-#
-# Reference: docs/SECURITY-OPERATIONS.md §5
+# ALTERNATIVE (FULL grouping, dormant repos):
+# For repos you batch-review-and-pray (no active iteration), you may
+# prefer "true weekly digest" — collapse everything into 2 groups per
+# ecosystem (security + all-versions, no update-types filter). See
+# docs/SECURITY-OPERATIONS.md §5.2 for that pattern.
 
 updates:
   # GitHub Actions (always safe to enable; no language-specific deps)
@@ -44,9 +46,9 @@ updates:
   #     pip-security:
   #       applies-to: security-updates
   #       patterns: ["*"]
-  #     pip-versions:
+  #     pip-minor-patch:
   #       applies-to: version-updates
-  #       patterns: ["*"]
+  #       update-types: ["minor", "patch"]
 
   # NPM / JAVASCRIPT ──────────────────────────────────────────────────
   # - package-ecosystem: "npm"
@@ -63,9 +65,9 @@ updates:
   #     npm-security:
   #       applies-to: security-updates
   #       patterns: ["*"]
-  #     npm-versions:
+  #     npm-minor-patch:
   #       applies-to: version-updates
-  #       patterns: ["*"]
+  #       update-types: ["minor", "patch"]
 
   # DOCKER ─────────────────────────────────────────────────────────────
   # - package-ecosystem: "docker"

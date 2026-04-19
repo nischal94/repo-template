@@ -141,31 +141,46 @@ Workflows that benefit from this pattern: `actionlint`, `bandit`, `trivy`, `pip-
 
 ## 5. Dependabot operations
 
-### 5.1 The "FULL grouping" pattern (default)
-This template's `dependabot.yml` ships with **two groups per ecosystem**:
+### 5.1 The "3-group" pattern (default — for active repos)
+This template's `dependabot.yml` ships with **three groups per ecosystem**:
 
 | Group | Catches | Why separate |
 |---|---|---|
 | `<ecosystem>-security` | All vulnerability fixes | Urgent — needs prioritized review |
-| `<ecosystem>-versions` | All version bumps INCLUDING majors | Routine — single weekly digest |
+| `<ecosystem>-minor-patch` | Safe semver bumps | Single weekly digest of low-risk upgrades |
+| (none — majors) | Major-version bumps | Each major gets its own PR so a v6→v7 breaking change can't take down a grouped PR's CI and block safe patches inside it |
 
-**Result**: maximum 2 PRs per ecosystem per week, regardless of how many deps are stale. Burst-proof.
+**Trade-off**: when several majors are outdated, you get one PR per major. Worth the isolation for actively-iterated repos where merging a broken bundle is costly.
 
-**Trade-off**: a grouped `<ecosystem>-versions` PR may bundle a major-version upgrade with several minor/patch upgrades. The reviewer must glance at each embedded changelog rather than triage by PR title. For solo-dev / personal repos this is the right call. For larger teams that want per-major reviews, use the alternative pattern below.
+**Use this for**: actively-developed repos (sonar, your active personal projects). The per-major PR overhead is worth it because CI failures stay isolated.
 
-### 5.2 Alternative: "majors stay individual" pattern
-If you want major-version PRs to remain individual (so each major's changelog gets its own review thread), use a 3-group config:
+### 5.2 Alternative: "FULL grouping" pattern (for dormant repos)
+For repos you batch-review-and-pray (no active iteration, you scan deps once a quarter), collapse everything into TWO groups per ecosystem:
+
 ```yaml
 groups:
-  pip-security:
+  npm-security:
     applies-to: security-updates
     patterns: ["*"]
-  pip-minor-patch:
+  npm-versions:
     applies-to: version-updates
-    update-types: ["minor", "patch"]
-  # Majors NOT in any group → individual PRs
+    patterns: ["*"]
+  # Majors are now grouped INTO npm-versions — no individual PRs ever
 ```
-This was the template's earlier default but was changed because solo-dev review cadence didn't justify the per-major PR overhead.
+
+**Result**: maximum 2 PRs per ecosystem per week. True weekly digest. Burst-proof.
+
+**Cost**: a grouped `<ecosystem>-versions` PR may bundle a major-version upgrade (with breaking changes) alongside safe patches. If the major breaks CI, the entire grouped PR fails — you can't merge ANY of the safe patches without splitting or fixing.
+
+**Use this for**: dormant repos, static landing pages, archived-but-still-deployed projects.
+
+### 5.3 Choosing between them
+| Repo profile | Pattern | Reason |
+|---|---|---|
+| Active product with CI + tests | 3-group (default) | CI failure isolation matters |
+| Personal active iteration | 3-group | Same |
+| Dormant / static / batch-review | FULL grouping | Per-major review overhead not worth it |
+| You don't know yet | Default to 3-group | Easier to migrate dormant→FULL later than to recover from a broken grouped major |
 
 ### 5.3 Hard cap: `open-pull-requests-limit: 2`
 Independent of grouping, this caps the total open Dependabot PRs per ecosystem at 2. Protects against config drift if grouping breaks. Bump to 5 once you've cleared any backlog and want faster turnover.
