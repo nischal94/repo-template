@@ -1,49 +1,76 @@
 version: 2
 
-# Dependabot configuration for the template. By default only GitHub Actions
-# updates are enabled — they're language-agnostic and always safe.
+# Dependabot configuration for the template. Default config:
+#   - github-actions: monthly, grouped — single PR per month with all updates
+#   - language ecosystems (pip/npm/docker): commented out, opt-in per repo
 #
-# When using this template for a real project, uncomment the ecosystem
-# block(s) matching your stack. WARNING: enabling on a stale repo will
-# produce a burst of upgrade PRs immediately. Set open-pull-requests-limit
-# low (1-2) at first if the repo has many outdated deps.
+# When using this template for a real project, uncomment the matching
+# ecosystem block. The `groups:` section collapses bursts: instead of
+# 22 separate security PRs, you get ONE grouped weekly PR per ecosystem.
+#
+# WARNING: enabling on a stale repo will trigger an initial burst of
+# version-update PRs. The grouping below collapses them, but expect
+# 1-2 grouped PRs the first week.
 
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "monthly"
-    labels:
-      - "dependencies"
-      - "ci"
+    labels: ["dependencies", "ci"]
     commit-message:
       prefix: "chore(ci)"
       include: "scope"
+    groups:
+      gh-actions:
+        applies-to: version-updates
+        patterns: ["*"]
 
+  # PYTHON ────────────────────────────────────────────────────────────
   # - package-ecosystem: "pip"
   #   directory: "/"
   #   schedule:
   #     interval: "weekly"
   #     day: "monday"
   #   open-pull-requests-limit: 5
-  #   labels: ["dependencies"]
+  #   labels: ["dependencies", "python"]
   #   commit-message:
   #     prefix: "chore(deps)"
   #     include: "scope"
+  #   groups:
+  #     python-security:
+  #       applies-to: security-updates
+  #       patterns: ["*"]
+  #     python-minor-patch:
+  #       applies-to: version-updates
+  #       update-types: ["minor", "patch"]
+  #     # Major upgrades stay individual (breaking changes deserve review)
 
+  # NPM / JAVASCRIPT ──────────────────────────────────────────────────
   # - package-ecosystem: "npm"
   #   directory: "/"
   #   schedule:
   #     interval: "weekly"
   #     day: "monday"
   #   open-pull-requests-limit: 5
-  #   labels: ["dependencies"]
+  #   labels: ["dependencies", "javascript"]
   #   commit-message:
   #     prefix: "chore(deps)"
   #     include: "scope"
+  #   groups:
+  #     npm-security:
+  #       applies-to: security-updates
+  #       patterns: ["*"]
+  #     npm-minor-patch:
+  #       applies-to: version-updates
+  #       update-types: ["minor", "patch"]
 
+  # DOCKER ─────────────────────────────────────────────────────────────
   # - package-ecosystem: "docker"
   #   directory: "/"
   #   schedule:
   #     interval: "weekly"
   #   labels: ["dependencies", "docker"]
+  #   groups:
+  #     docker:
+  #       patterns: ["*"]
