@@ -266,8 +266,8 @@ h2.toc-heading + .toc {
 </div>
 <h1 id="enterprise-ci-template-design">Enterprise CI Template Design<a class="anchor" href="#enterprise-ci-template-design" title="Permalink to this section">#</a></h1>
 <ul>
-<li><strong>Status:</strong> Draft v0.4, pending implementation plan</li>
-<li><strong>Date:</strong> 2026-05-09 (v0.1 → v0.4, same-day revisions)</li>
+<li><strong>Status:</strong> Draft v0.5, pending implementation plan</li>
+<li><strong>Date:</strong> 2026-05-09 (v0.1 → v0.5, same-day revisions)</li>
 <li><strong>Author:</strong> Nischal (<code>@nischal94</code>)</li>
 <li><strong>Scope:</strong> Future repos created on the <code>nischal94</code> GitHub account</li>
 <li><strong>Non-goals:</strong> Retroactive migration of existing repos; multi-org governance; GHEC-specific features</li>
@@ -277,6 +277,7 @@ h2.toc-heading + .toc {
 <ul>
 <li><a href="#contents">Contents</a></li>
 <li><a href="#changelog">Changelog</a><ul>
+<li><a href="#v05-2026-05-09">v0.5 — 2026-05-09</a></li>
 <li><a href="#v04-2026-05-09">v0.4 — 2026-05-09</a></li>
 <li><a href="#v03-2026-05-09">v0.3 — 2026-05-09</a></li>
 <li><a href="#v02-2026-05-09">v0.2 — 2026-05-09</a></li>
@@ -338,6 +339,49 @@ h2.toc-heading + .toc {
 </ul>
 </div>
 <h2 id="changelog">Changelog<a class="anchor" href="#changelog" title="Permalink to this section">#</a></h2>
+<h3 id="v05-2026-05-09">v0.5 — 2026-05-09<a class="anchor" href="#v05-2026-05-09" title="Permalink to this section">#</a></h3>
+<p>Surgical consistency pass after the v0.4 review. No architecture changes.
+Eight findings (2 MAJOR, 4 MINOR, 2 NITPICK) addressed in one edit pass:</p>
+<ul>
+<li><strong>§6</strong>: corrected stale &ldquo;Vercel Deploy: cd-deploy.yml (OIDC, no
+  VERCEL_TOKEN)&rdquo; to match §4.6&rsquo;s honest gap framing. The &ldquo;OIDC for
+  Vercel&rdquo; claim was a v0.1/v0.2 artifact that survived through three
+  reviews undetected.</li>
+<li><strong>v0.4 changelog correction note</strong>: clarified that v0.4 is <em>not</em> a
+  downgrade of the SLSA L3 / Scorecard ≥ 7 bar — those are unchanged
+  because they live in build provenance, not secret storage. Only the
+  App-key trust root simplified.</li>
+<li><strong>§7.2</strong>: clarified that GitHub session compromise allows direct
+  <code>APP_PRIVATE_KEY</code> exfiltration via the secrets API or a self-approved
+  workflow PR. Branch protection is a code-path gate, not a
+  secrets-path gate.</li>
+<li><strong>§3.3a</strong>: corrected <code>creation</code> rule mis-description. The rule
+  restricts who can create matching branches, it does not &ldquo;require PR&rdquo;
+  (that comes from the <code>pull_request</code> rule already listed).</li>
+<li><strong>§9 step 2</strong>: documented bootstrap circularity. The App can&rsquo;t
+  protect its own host repo before its first run; humans must apply
+  <code>policies/canonical-ruleset.json</code> to <code>nischal94/.github</code> manually
+  via <code>gh api</code> once during bootstrap.</li>
+<li><strong>§3.3c</strong>: noted that mechanical <code>pull_request_target</code> enforcement
+  via an actionlint custom rule is a future hardening; v1 ships with
+  social enforcement only.</li>
+<li><strong>§3.3c</strong>: justified annual key rotation cadence (low-frequency
+  rotation matches the App&rsquo;s low blast radius — single account, no
+  cross-tenant exposure; quarterly is conventional for shared
+  enterprise systems where blast radius is broader).</li>
+<li><strong>§3.3c</strong>: added explicit reference to v0.3&rsquo;s recursive-trust
+  analysis where v0.4 collapses the argument to one sentence
+  (&ldquo;more surface, not less&rdquo;).</li>
+<li><strong>§5</strong>: scoped &ldquo;OIDC&rdquo; qualifier in the SLSA Build L3 mechanism cell
+  to &ldquo;OIDC where supported (§4.6)&rdquo; — Vercel/Fly/Railway/Render are
+  documented gaps.</li>
+<li><strong>§3.3c item 3</strong>: added TOTP recovery-codes storage guidance
+  (password manager, not in <code>nischal94/.github</code>).</li>
+<li><strong>NITPICK fixes</strong>: §3.3 introduces <code>nischal94-policy</code> by name on
+  first mention; §3.3e failure-mode table corrected to use the
+  <code>state-writer</code> shared concurrency group; v0.4 changelog&rsquo;s
+  unverifiable &ldquo;~80 lines net reduction&rdquo; claim removed.</li>
+</ul>
 <h3 id="v04-2026-05-09">v0.4 — 2026-05-09<a class="anchor" href="#v04-2026-05-09" title="Permalink to this section">#</a></h3>
 <p><strong>Pragmatic simplification for solo-dev scope.</strong> v0.3 mandated 1Password
 Connect + OIDC + hardware MFA on the secret-manager root, citing a
@@ -365,17 +409,22 @@ hardening:</p>
   model. The recursive-trust analysis collapses: there&rsquo;s no external
   secret manager root credential to worry about anymore; the only
   trust root is &ldquo;your GitHub login + TOTP.&rdquo;</li>
-<li><strong>Spec is shorter overall</strong> (~80 lines net reduction): the OIDC
-  trust policy JSON, the 1Password Connect setup flow, the recursive
-  trust paragraphs, and the environment-gate caveat all leave with
-  the v0.3 design.</li>
+<li><strong>Spec is simpler overall</strong>: the OIDC trust policy JSON, the
+  1Password Connect setup flow, the recursive trust paragraphs, and
+  the environment-gate caveat all leave with the v0.3 design.</li>
 </ul>
-<p>This is a <em>deliberate downgrade</em> from v0.3&rsquo;s stated bar (SLSA L3 /
-Scorecard ≥ 7) to a pragmatic solo-dev floor. The build-provenance
-(SLSA L3) machinery stays — that has nothing to do with secret
-storage. What changes is the App-key trust root, which is now
-&ldquo;GitHub repo secret protected by branch protection&rdquo; instead of
-&ldquo;external secret manager protected by hardware MFA.&rdquo;</p>
+<p><strong>v0.5 correction</strong>: this paragraph in the original v0.4 changelog
+mis-stated the change as a &ldquo;deliberate downgrade from v0.3&rsquo;s stated
+bar (SLSA L3 / Scorecard ≥ 7).&rdquo; That framing is wrong. SLSA Build L3
+and OpenSSF Scorecard are both <strong>independent of secret storage</strong>:
+- SLSA L3 lives in build provenance (<code>slsa-github-generator</code> produces
+  the in-toto attestation regardless of where the App key lives).
+- OpenSSF Scorecard scores supply-chain hygiene per repo and never
+  inspects how secrets are stored.</p>
+<p>What v0.4 actually downgraded is the <strong>App-key trust root only</strong>: from
+&ldquo;external secret manager protected by hardware MFA&rdquo; to &ldquo;GitHub repo
+secret protected by branch protection + TOTP MFA.&rdquo; The SLSA L3 and
+Scorecard ≥ 7 targets in §5 are unchanged.</p>
 <h3 id="v03-2026-05-09">v0.3 — 2026-05-09<a class="anchor" href="#v03-2026-05-09" title="Permalink to this section">#</a></h3>
 <p>Surgical fixes from the third review pass. No architecture changes.</p>
 <ul>
@@ -593,8 +642,10 @@ the stated SLSA L3 / EO 14028 bar.</p>
 </tbody>
 </table>
 <h3 id="33-enforcement-architecture">3.3 Enforcement architecture<a class="anchor" href="#33-enforcement-architecture" title="Permalink to this section">#</a></h3>
-<p>A custom GitHub App registered at the user account level, installed once
-across all repos. Owns admin-grade actions that PATs cannot safely perform.</p>
+<p>A custom GitHub App named <strong><code>nischal94-policy</code></strong>, registered at the
+user account level, installed once across all repos. Owns admin-grade
+actions that PATs cannot safely perform. Subsequent prose in this spec
+refers to it as &ldquo;the App&rdquo; or &ldquo;the policy App&rdquo; — same entity throughout.</p>
 <p><strong>Permissions:</strong> <code>administration: write</code> (rulesets API),
 <code>metadata: read</code>, <code>contents: write</code> (for sync PRs), <code>pull_requests: write</code>,
 <code>issues: write</code> (for drift-audit issues), <code>actions: read</code>.</p>
@@ -633,7 +684,12 @@ deletions, restrict force-pushes) work on user-owned repos.</p>
   review)
 - <code>deletion</code> (block branch deletion)
 - <code>non_fast_forward</code> (block force-push)
-- <code>creation</code> (require PR via <code>bypass_actors</code> for the App itself)</p>
+- <code>creation</code> (restrict who can create branches matching <code>main</code> to the
+  App&rsquo;s installation; on a fresh repo this prevents an attacker from
+  pushing a brand-new <code>main</code> ref before the App applies the rest of
+  the ruleset). Note: <code>pull_request</code> (above) is what enforces PR-only
+  changes; <code>creation</code> is a separate guard against ref creation, not
+  about PRs.</p>
 <p>Smoke-tested on a throwaway user-owned repo before declaring the schema
 final.</p>
 <h4 id="33b-four-workflows-in-nischal94github">3.3b Four workflows in <code>nischal94/.github</code><a class="anchor" href="#33b-four-workflows-in-nischal94github" title="Permalink to this section">#</a></h4>
@@ -722,8 +778,9 @@ v0.3 against an attacker who compromises the GitHub session, but
 <strong>measurably stronger</strong> against operational complexity (a Connect
 server can fail; an external secret manager adds vendor risk; recursive
 trust through additional credentials creates more surface, not less,
-on a solo account). For the actual threat model, this is the right
-trade.</p>
+on a solo account — see the v0.3 changelog entry below for the full
+recursive-trust analysis we collapsed into this paragraph). For the
+actual threat model, this is the right trade.</p>
 <p><strong>Required protections on <code>nischal94/.github</code></strong> (these are the trust
 boundary):</p>
 <ol>
@@ -734,15 +791,35 @@ boundary):</p>
 <li><strong>No <code>pull_request_target</code> workflows ever in this repo.</strong> This
    trigger lets PRs from forks run with secret access — exactly the
    attack vector that justified external secret management. Documented
-   here as a never-do; enforced by review discipline (the App canary
-   does not detect this; humans must).</li>
+   here as a never-do; enforced by review discipline in v1 (the App
+   canary does not detect this; humans must). <strong>Future hardening</strong>:
+   add a custom <a href="https://github.com/rhysd/actionlint">actionlint</a>
+   rule or a tiny <code>grep</code> step in <code>enforce-on-poll</code> that mechanically
+   rejects any workflow file in <code>nischal94/.github</code> containing
+   <code>pull_request_target:</code>. Tracked as a v2 improvement; v1 ships
+   without it because the social-enforcement bar is acceptable on a
+   solo account where every workflow change passes through the author.</li>
 <li><strong>TOTP MFA on the GitHub account login</strong> (<code>nischal94</code>). Authenticator
    app such as Authy, 1Password, or Google Authenticator. Stronger than
    password-only; weaker than a hardware security key. See §7.2 for the
-   honest trade and the YubiKey upgrade path.</li>
+   honest trade and the YubiKey upgrade path. <strong>Recovery codes</strong>: when
+   you enable TOTP, GitHub displays 16 single-use recovery codes. Store
+   them in your password manager (1Password, Bitwarden, Keychain) — NOT
+   in <code>nischal94/.github</code> (would defeat the point) and NOT only on the
+   device that holds the TOTP authenticator (loss of that device leaves
+   you locked out). If the TOTP device is later lost, recovery codes
+   are the only path back to the account.</li>
 <li><strong>Annual rotation of the App private key.</strong> Generate a new key in
    the App settings, replace <code>APP_PRIVATE_KEY</code> in repo secrets, revoke
-   the old key. ~5-minute task, calendar reminder.</li>
+   the old key. ~5-minute task, calendar reminder. <strong>Why annual and
+   not quarterly</strong>: the conventional quarterly cadence is sized for
+   shared enterprise systems where blast radius covers many tenants
+   and a leaked key may be unnoticed for months. Here the blast radius
+   is one account, the key is consumed only by workflows in
+   <code>nischal94/.github</code> (which the canary watches daily), and a leaked
+   key would surface fast through the drift audit detecting unexpected
+   ruleset changes. Annual is sufficient for v1 scope. If this account
+   ever takes on collaborators or paying users, tighten to quarterly.</li>
 </ol>
 <p><strong>What workflows do at runtime:</strong></p>
 <pre><code class="language-yaml"># In each of the four enforcement workflows in nischal94/.github:
@@ -826,7 +903,7 @@ committed by the App on each successful enforcement run. Schema:</p>
 <tbody>
 <tr>
 <td>Two <code>*/5</code> runs overlap</td>
-<td><code>concurrency: enforce-on-poll, cancel-in-progress: false</code> serializes them</td>
+<td>shared <code>concurrency: state-writer, cancel-in-progress: false</code> (across all four state-writing workflows per §3.3b) serializes them</td>
 </tr>
 <tr>
 <td>Repo deleted then recreated with same name</td>
@@ -1342,8 +1419,8 @@ Triggers <code>sbom-on-release.yml</code> and <code>attest-build-provenance.yml<
 <tbody>
 <tr>
 <td><a href="https://slsa.dev/spec/v1.0/levels">SLSA</a></td>
-<td>Level 3</td>
-<td>OIDC + provenance attestation + isolated builds + signed releases</td>
+<td>Build L3</td>
+<td><code>slsa-github-generator</code> for in-toto provenance + <code>slsa-verifier</code> on the consumer side + isolated hosted-runner builds + OIDC where the deploy provider supports it (§4.6 documents per-provider gaps)</td>
 </tr>
 <tr>
 <td><a href="https://scorecard.dev">OpenSSF Scorecard</a></td>
@@ -1411,7 +1488,7 @@ design:</p>
 </tr>
 <tr>
 <td>Post-CI/CD: Vercel Deploy</td>
-<td><code>cd-deploy.yml</code> (OIDC, no <code>VERCEL_TOKEN</code>)</td>
+<td><code>cd-deploy.yml</code> (project-scoped <code>VERCEL_TOKEN</code>; OIDC gap, see §4.6)</td>
 </tr>
 <tr>
 <td>Post-CI/CD: Vercel Preview Comments</td>
@@ -1451,12 +1528,28 @@ webhook receiver path is documented as future work in §3.3d.</p>
 <p>Per §3.3c: the App private key lives in <code>nischal94/.github</code> as a
 regular Actions secret. The trust boundary is therefore:</p>
 <ol>
-<li><strong>GitHub session compromise</strong> → attacker can push to <code>.github/main</code>
-   (gated by branch protection — needs PR + signed commit, but on a
-   solo account self-approval is possible).</li>
-<li><strong>GitHub login compromise</strong> → attacker can read the secret directly
-   via the API or by triggering a workflow that exfiltrates it.</li>
+<li><strong>GitHub session compromise</strong> → attacker has at least three direct
+   exfiltration paths, none of which branch protection mediates:
+   - Read <code>APP_PRIVATE_KEY</code> via the GitHub Settings UI (repo →
+     Settings → Secrets — secrets ARE re-displayable when the
+     &ldquo;show value&rdquo; / &ldquo;update&rdquo; UI surfaces; on certain account states
+     they&rsquo;re written to clipboards).
+   - Read via the <a href="https://docs.github.com/en/rest/actions/secrets">secrets REST API</a>
+     (returns metadata only — values are write-only — so this path is
+     blocked, but the attacker can <em>overwrite</em> the secret with their
+     own key).
+   - Open a self-approved workflow PR that exfiltrates the secret to
+     an external endpoint (<code>echo "$APP_PRIVATE_KEY" | curl</code>) — branch
+     protection requires PR + signed commit but on a solo account
+     self-approval makes this a speed bump, not an authorization gate.</li>
+<li><strong>GitHub login compromise</strong> (no live session yet) → attacker
+   bypasses TOTP via real-time phishing, then has all the paths above.</li>
 </ol>
+<p><strong>Branch protection is a code-path gate, not a secrets-path gate.</strong>
+The honest risk is that anyone holding a live <code>nischal94</code> session
+cookie or who can authenticate as <code>nischal94</code> can read or replace
+<code>APP_PRIVATE_KEY</code> — the only mitigation against that is keeping the
+session/login itself uncompromised.</p>
 <p>The login compromise vector is the bigger risk. Mitigations in v0.4:</p>
 <ul>
 <li><strong>TOTP MFA on the GitHub account</strong> (Authy / 1Password / Google
@@ -1573,32 +1666,42 @@ if/when external contributors join a specific project.</p>
    - Repository secret: <code>APP_PRIVATE_KEY</code> (the App&rsquo;s <code>.pem</code> contents)
    - Repository variables: <code>APP_ID</code>, <code>APP_INSTALLATION_ID</code>,
      <code>APP_INTEGRATION_ID</code></li>
-<li>Implement <code>enforce-on-poll.yml</code> (§3.3b). Smoke-test:
+</ol>
+<p><strong>Bootstrap circularity</strong> (must be handled here): the App is
+   <em>housed in</em> <code>nischal94/.github</code>, so it cannot self-protect that
+   repo before its first run. Manually apply
+   <code>policies/canonical-ruleset.json</code> to <code>nischal94/.github</code> itself
+   via <code>gh api -X POST repos/nischal94/.github/rulesets -F @policies/canonical-ruleset.json</code>
+   immediately after seeding, BEFORE pushing the App&rsquo;s first commit.
+   Otherwise the trust-root repo sits unprotected through the
+   first poll cycle. After this manual application, all future
+   ruleset updates flow through the standard <code>force-sync.yml</code> /
+   <code>enforce-on-poll.yml</code> paths.
+3. Implement <code>enforce-on-poll.yml</code> (§3.3b). Smoke-test:
    - Create throwaway repo <code>nischal94/test-enforcement-1</code>
    - Wait for the next poll
    - Verify the canonical ruleset is applied via
      <code>gh api repos/nischal94/test-enforcement-1/rulesets</code>
    - Verify the state file is updated
-   - Verify a second poll is a no-op</li>
-<li>Implement <code>scaffold-on-poll.yml</code> (§3.3b). Smoke-test that it opens a
-   PR into <code>test-enforcement-1</code> materializing the Layer 1 workflows.</li>
-<li>Implement <code>drift-audit.yml</code> (§3.4). Smoke-test by manually corrupting
+   - Verify a second poll is a no-op
+4. Implement <code>scaffold-on-poll.yml</code> (§3.3b). Smoke-test that it opens a
+   PR into <code>test-enforcement-1</code> materializing the Layer 1 workflows.
+5. Implement <code>drift-audit.yml</code> (§3.4). Smoke-test by manually corrupting
    the ruleset on <code>test-enforcement-1</code> and verifying drift is detected
-   and a PR is opened.</li>
-<li>Implement <code>force-sync.yml</code> (§3.3b). Smoke-test manual dispatch.</li>
-<li>Refactor <code>nischal94/repo-template</code> per §4: add <code>.github/scripts/</code>,
+   and a PR is opened.
+6. Implement <code>force-sync.yml</code> (§3.3b). Smoke-test manual dispatch.
+7. Refactor <code>nischal94/repo-template</code> per §4: add <code>.github/scripts/</code>,
    <code>stacks.yml</code> example, eight language profile workflows, OIDC-based
-   <code>cd-deploy.yml</code>, <code>slsa-github-generator</code>-based release workflow.</li>
-<li>Replace <code>bootstrap.sh</code> per §4.7 (drop branch-protection logic, keep
-   stack scaffolding).</li>
-<li>Add <code>LICENSE-OVERRIDE.md</code> mechanism and the <code>license-check.yml</code>
-   workflow.</li>
-<li>Smoke-test end-to-end: create <code>nischal94/test-fullstack-1</code> from the
+   <code>cd-deploy.yml</code>, <code>slsa-github-generator</code>-based release workflow.
+8. Replace <code>bootstrap.sh</code> per §4.7 (drop branch-protection logic, keep
+   stack scaffolding).
+9. Add <code>LICENSE-OVERRIDE.md</code> mechanism and the <code>license-check.yml</code>
+   workflow.
+10. Smoke-test end-to-end: create <code>nischal94/test-fullstack-1</code> from the
     template, wait for the polling cycle, verify ruleset + workflows +
-    bootstrap PR all land correctly.</li>
-<li>Document the system in this repo&rsquo;s <code>README.md</code> and link from each
-    new repo&rsquo;s auto-generated README.</li>
-</ol>
+    bootstrap PR all land correctly.
+11. Document the system in this repo&rsquo;s <code>README.md</code> and link from each
+    new repo&rsquo;s auto-generated README.</p>
 <p>A detailed implementation plan with task ordering, dependencies, and
 verification steps will be produced by the <code>writing-plans</code> skill in the
 next step.</p>
