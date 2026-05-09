@@ -1,12 +1,32 @@
 # Enterprise CI Template Design
 
-- **Status:** Draft v0.5, pending implementation plan
-- **Date:** 2026-05-09 (v0.1 → v0.5, same-day revisions)
+- **Status:** Draft v0.6, Phase 2 implemented + lessons learned
+- **Date:** 2026-05-09 (v0.1 → v0.5); 2026-05-10 (v0.6 amendment)
 - **Author:** Nischal (`@nischal94`)
 - **Scope:** Future repos created on the `nischal94` GitHub account
 - **Non-goals:** Retroactive migration of existing repos; multi-org governance; GHEC-specific features
 
 ## Changelog
+
+### v0.6 — 2026-05-10
+
+Phase 2 implementation complete. End-to-end lifecycle verified on a
+throwaway test repo. Six implementation-time bugs that the spec did
+not anticipate are documented in the new §10 (Phase 2 lessons learned)
+appendix. The v0.5 spec text is unchanged; v0.6 is a pure addendum
+capturing what implementation taught us.
+
+Notably:
+- §10.1 documents that the App needs `Workflows: write` (not just
+  `Contents: write`) to scaffold workflow files into target repos.
+- §10.4 documents that workflow-side writes to repos under the
+  canonical ruleset must use the Contents API, not `git push`.
+
+These two lessons are the most likely to bite future implementers
+building similar systems. The other four (10.2 empty-repo default
+branch, 10.3 cross-repo `gh pr create` auth, 10.5 osv-scanner v2 flag
+changes, 10.6 scaffold discovery chicken-and-egg) are smaller but
+worth recording.
 
 ### v0.5 — 2026-05-09
 
@@ -1187,3 +1207,111 @@ In rough order of dependency:
 A detailed implementation plan with task ordering, dependencies, and
 verification steps will be produced by the `writing-plans` skill in the
 next step.
+
+## 10. Phase 2 lessons learned (2026-05-10 amendment)
+
+The v0.5 spec was implemented end-to-end on 2026-05-09–10. Six bugs
+surfaced during execution that the spec did not anticipate. Each is
+captured here as design context for future implementers (or future-you
+when revisiting these mechanisms).
+
+### 10.1 GitHub App needs `Workflows: write` permission, not just `Contents: write`
+
+**Bug**: `scaffold-on-poll`'s `git push` failed on every target repo with
+`refusing to allow a GitHub App to create or update workflow .github/workflows/<file> without 'workflows' permission`.
+
+**Why**: GitHub gates workflow files (`.github/workflows/*`) behind a
+*separate* App permission from `contents`, specifically to prevent a
+less-privileged App from injecting CI changes. The v0.5 spec §3.3 listed
+permissions but missed `workflows: write`.
+
+**Fix**: registered Apps must add `Workflows: Read and write` under
+Repository permissions in addition to `Contents: write`. After editing
+permissions on the App settings page, the installation must be
+re-accepted (GitHub prompts on the installations page).
+
+### 10.2 Empty repos created without an initial commit have no `main`
+
+**Bug**: `gh repo create <name> --public` (without `--add-readme`) creates
+a repo with *no commits and no default branch*. When `scaffold-on-poll`
+clones it, branches off, and pushes its scaffold branch, GitHub
+*auto-promotes that branch to default* because there's no `main` to
+beat it. Subsequent `gh pr create --base main` then fails with "no such
+branch."
+
+**Fix**: either (a) always `gh repo create --add-readme` so the new repo
+has an initial commit on `main` from creation, or (b) make
+`scaffold-on-poll` defensive — detect a default branch named anything
+other than `main` and rename it back. The plan should default to (a)
+because it produces less surprise on the target repo.
+
+### 10.3 `gh pr create` from a workflow needs the App's installation token, not `GITHUB_TOKEN`
+
+**Bug**: After fixing 10.1 and 10.2, `git push` succeeded but `gh pr create`
+failed with `GraphQL: Resource not accessible by integration (createPullRequest)`.
+
+**Why**: `gh pr create` reads `GH_TOKEN` from env. The default in a
+workflow is `secrets.GITHUB_TOKEN`, which is the *workflow's* per-run
+token (identity: `github-actions[bot]`). That token has `pull-requests:
+write` only on the *workflow's host repo* (`nischal94/.github`), not
+cross-repo on the scaffold target. The App's installation token IS
+cross-repo authorized (App is installed on All Repositories), but it
+must be passed explicitly.
+
+**Fix**: prefix the call with `GH_TOKEN="$TOKEN" gh pr create ...` where
+`$TOKEN` is the App's installation token from `mint_installation_token`.
+Single-line fix.
+
+### 10.4 The state file's writer cannot push from inside a workflow due to required-signatures
+
+**Bug**: `commit_state` originally used `git push origin main` to commit
+state-file changes. The push was rejected by the canonical ruleset's
+`required_signatures` rule. Even adding `bypass_actors` for the App
+didn't help, because the workflow's `git push` authenticates as
+`github-actions[bot]` (the workflow's GITHUB_TOKEN), not as the App.
+
+**Fix**: rewrite `commit_state` to use the GitHub Contents API
+(`PUT /repos/{owner}/{repo}/contents/state/configured-repos.json`) with
+the App's installation token. The Contents API web-flow-signs commits
+on the server side (satisfies `required_signatures`) and authenticates
+as the App (`bypass_actors` recognizes it).
+
+The lesson generalizes: any workflow-side write to a repo under the
+canonical ruleset must use the Contents API, not local `git push`.
+
+### 10.5 `osv-scanner` v2 changed flag set + exit-code semantics
+
+**Bug**: The original Phase 1 workflow referenced
+`google/osv-scanner-action/osv-scanner-action@<sha>` — a path that
+doesn't exist (doubled segment). Replacement with the v2 CLI directly
+revealed two more issues: (a) `--skip-git` was removed in v2 (now
+implicit default), and (b) v2 exits 128 (not 0) when no manifests are
+found in the scanned dir.
+
+**Fix**: install `osv-scanner` from the GitHub release directly. Use the
+`scan source` subcommand with `--recursive` only. Treat exit 128 as
+success (`# nothing to scan, this repo has no manifests`).
+
+### 10.6 Scaffold-on-poll's discovery loop was chicken-and-egg
+
+The original v0.5 design had `scaffold-on-poll` keying off
+`state/configured-repos.json` to find scaffold candidates. But
+un-scaffolded repos aren't in that file (only post-enforcement repos
+get added). So scaffold-on-poll had no data when it should have had
+the most.
+
+**Fix**: scaffold-on-poll discovers candidates by querying the App's
+installation list directly (same source enforce-on-poll uses), then
+probes each repo for the marker file
+(`.github/policy/.scaffolded-by-nischal94-policy`). Repos *without* the
+marker are scaffold candidates. The two workflows now use the same data
+source, with opposite filters.
+
+### Summary
+
+All 6 bugs are now fixed in the deployed `nischal94/.github` workflows.
+The v0.5 spec text remains canonical for the *intent*; this addendum
+captures the *implementation realities* that emerged during execution.
+Future implementers building similar systems should expect to hit
+analogous issues — particularly 10.1 (the Workflows permission) and
+10.4 (the Contents API requirement for workflow-side state writes).
