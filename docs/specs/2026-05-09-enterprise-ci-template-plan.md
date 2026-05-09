@@ -117,14 +117,6 @@ reuse and credential stuffing.
   Confirm GitHub prompts for the TOTP code on the next login. If it
   doesn't, 2FA isn't actually active — re-do Step 2.
 
-- [ ] **Step 4: (Optional but recommended) Add a YubiKey upgrade reminder**
-
-  Per spec §7.2, hardware security keys close the real-time phishing
-  vector that TOTP doesn't. Calendar reminder for ~6 months:
-  *"Buy YubiKey 5 series, enroll on GitHub, replace TOTP."* ~$50.
-  Do it when this account ever touches paying users or production
-  data with revenue impact.
-
 ### Task 0.3: Store the App private key as a `nischal94/.github` repo secret
 
 The spec §3.3c v0.4 design: App private key lives as a regular Actions

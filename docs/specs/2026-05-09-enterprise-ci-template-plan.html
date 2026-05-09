@@ -477,14 +477,6 @@ reuse and credential stuffing.</p>
 </ul>
 <p>Confirm GitHub prompts for the TOTP code on the next login. If it
   doesn&rsquo;t, 2FA isn&rsquo;t actually active — re-do Step 2.</p>
-<ul>
-<li>[ ] <strong>Step 4: (Optional but recommended) Add a YubiKey upgrade reminder</strong></li>
-</ul>
-<p>Per spec §7.2, hardware security keys close the real-time phishing
-  vector that TOTP doesn&rsquo;t. Calendar reminder for ~6 months:
-  <em>&ldquo;Buy YubiKey 5 series, enroll on GitHub, replace TOTP.&rdquo;</em> ~$50.
-  Do it when this account ever touches paying users or production
-  data with revenue impact.</p>
 <h3 id="task-03-store-the-app-private-key-as-a-nischal94github-repo-secret">Task 0.3: Store the App private key as a <code>nischal94/.github</code> repo secret<a class="anchor" href="#task-03-store-the-app-private-key-as-a-nischal94github-repo-secret" title="Permalink to this section">#</a></h3>
 <p>The spec §3.3c v0.4 design: App private key lives as a regular Actions
 secret. Trust boundary is GitHub itself, hardened by branch protection
