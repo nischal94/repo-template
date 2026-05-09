@@ -1,0 +1,3163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="markdown-py">
+<title>Enterprise CI Template Implementation Plan</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --fg: #1f2328;
+  --muted: #59636e;
+  --border: #d1d9e0;
+  --border-muted: #d8dee4;
+  --code-bg: #f6f8fa;
+  --code-fg: #1f2328;
+  --link: #0969da;
+  --link-hover: #0550ae;
+  --accent: #d97757;
+  --table-stripe: #f6f8fa;
+  --kbd-bg: #f6f8fa;
+  --kbd-border: #d1d9e0;
+  --critical: #cf222e;
+  --warning: #9a6700;
+  --success: #1a7f37;
+  --info: #0969da;
+  --quote-border: #d1d9e0;
+  --shadow: 0 1px 3px rgba(31, 35, 40, 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --fg: #e6edf3;
+    --muted: #8d96a0;
+    --border: #30363d;
+    --border-muted: #21262d;
+    --code-bg: #161b22;
+    --code-fg: #e6edf3;
+    --link: #4493f8;
+    --link-hover: #58a6ff;
+    --accent: #ec8866;
+    --table-stripe: #161b22;
+    --kbd-bg: #161b22;
+    --kbd-border: #30363d;
+    --critical: #ff7b72;
+    --warning: #d29922;
+    --success: #3fb950;
+    --info: #58a6ff;
+    --quote-border: #30363d;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--fg);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.page {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 48px 32px 96px;
+}
+
+@media (max-width: 720px) {
+  .page { padding: 24px 16px 64px; }
+}
+
+.meta-banner {
+  font-size: 13px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border-muted);
+  padding-bottom: 12px;
+  margin-bottom: 32px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+.meta-banner .badge {
+  background: var(--code-bg);
+  border: 1px solid var(--border-muted);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.meta-banner .badge.draft {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  line-height: 1.25;
+  margin-top: 32px;
+  margin-bottom: 16px;
+  scroll-margin-top: 16px;
+}
+h1 { font-size: 2em; padding-bottom: 0.3em; border-bottom: 1px solid var(--border-muted); margin-top: 0; }
+h2 { font-size: 1.5em; padding-bottom: 0.3em; border-bottom: 1px solid var(--border-muted); }
+h3 { font-size: 1.25em; }
+h4 { font-size: 1em; color: var(--muted); }
+
+h1 .anchor, h2 .anchor, h3 .anchor, h4 .anchor {
+  opacity: 0;
+  margin-left: 8px;
+  font-size: 0.8em;
+  text-decoration: none;
+  color: var(--muted);
+  transition: opacity 0.15s ease;
+}
+h1:hover .anchor, h2:hover .anchor, h3:hover .anchor, h4:hover .anchor { opacity: 1; }
+
+a { color: var(--link); text-decoration: none; }
+a:hover { color: var(--link-hover); text-decoration: underline; }
+
+p { margin: 0 0 16px; }
+
+ul, ol { margin: 0 0 16px; padding-left: 28px; }
+li { margin-bottom: 4px; }
+li > p { margin-bottom: 8px; }
+ul ul, ul ol, ol ul, ol ol { margin-bottom: 0; }
+
+strong { font-weight: 600; color: var(--fg); }
+em { font-style: italic; }
+
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 85%;
+  background: var(--code-bg);
+  padding: 0.2em 0.4em;
+  border-radius: 6px;
+  color: var(--code-fg);
+}
+
+pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 16px;
+  overflow-x: auto;
+  font-size: 85%;
+  line-height: 1.45;
+  margin: 0 0 16px;
+  border: 1px solid var(--border-muted);
+}
+pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 100%;
+  border-radius: 0;
+}
+
+table {
+  border-collapse: collapse;
+  margin: 0 0 16px;
+  width: 100%;
+  display: block;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+thead { background: var(--code-bg); }
+th, td {
+  padding: 8px 14px;
+  border-top: 1px solid var(--border-muted);
+  border-right: 1px solid var(--border-muted);
+  text-align: left;
+  vertical-align: top;
+  font-size: 14px;
+}
+th:last-child, td:last-child { border-right: none; }
+th { font-weight: 600; }
+tbody tr:nth-child(even) { background: var(--table-stripe); }
+
+blockquote {
+  border-left: 4px solid var(--quote-border);
+  margin: 0 0 16px;
+  padding: 0 16px;
+  color: var(--muted);
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--border-muted);
+  margin: 32px 0;
+}
+
+h2.toc-heading {
+  background: var(--code-bg);
+  border: 1px solid var(--border-muted);
+  border-bottom: 1px solid var(--border-muted);
+  border-radius: 8px 8px 0 0;
+  padding: 14px 24px 10px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  box-shadow: var(--shadow);
+}
+h2.toc-heading + .toc {
+  background: var(--code-bg);
+  border: 1px solid var(--border-muted);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 8px 24px 16px;
+  margin: 0 0 40px;
+  font-size: 14px;
+  box-shadow: var(--shadow);
+}
+.toc > ul { padding-left: 0; list-style: none; columns: 2; column-gap: 32px; }
+.toc > ul > li { break-inside: avoid; padding-left: 0; margin-top: 8px; }
+.toc > ul > li:first-child { margin-top: 0; }
+.toc ul ul { padding-left: 16px; list-style: none; }
+.toc li { margin-bottom: 2px; }
+.toc a { color: var(--link); }
+
+@media (max-width: 720px) {
+  .toc > ul { columns: 1; }
+}
+
+.footer {
+  margin-top: 64px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-muted);
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+@media print {
+  body { font-size: 11pt; }
+  .page { max-width: none; padding: 0; }
+  pre, table { page-break-inside: avoid; }
+  h1, h2, h3 { page-break-after: avoid; }
+  .toc-wrap { page-break-after: always; }
+  a { color: inherit; text-decoration: none; }
+  .anchor { display: none; }
+}
+</style>
+</head>
+<body>
+<main class="page">
+<div class="meta-banner">
+  <span class="badge draft">Draft</span>
+  <span>Spec — 2026-05-09</span>
+  <span>nischal94/repo-template</span>
+  <span style="margin-left:auto"><a href="2026-05-09-enterprise-ci-template-design.md">View source (.md)</a></span>
+</div>
+<h1 id="enterprise-ci-template-implementation-plan">Enterprise CI Template Implementation Plan<a class="anchor" href="#enterprise-ci-template-implementation-plan" title="Permalink to this section">#</a></h1>
+<blockquote>
+<p><strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (<code>- [ ]</code>) syntax for tracking.</p>
+</blockquote>
+<p><strong>Goal:</strong> Build the two-layer enterprise CI template system specified in <code>2026-05-09-enterprise-ci-template-design.md</code> (v0.3), so that any future repo created from <code>nischal94/repo-template</code> is enterprise-grade by default.</p>
+<p><strong>Architecture:</strong> Layer 1 lives in <code>nischal94/.github</code> and ships universal CI workflows + a custom GitHub App (<code>nischal94-policy</code>) that polls every 5 minutes to apply rulesets, scaffold workflows, and audit drift across every repo on the account. Layer 2 lives in <code>nischal94/repo-template</code> and ships a stack-agnostic scaffold with auto-detection of 8 language profiles + OIDC-where-supported CD + <code>slsa-github-generator</code> releases. App private key lives as a repo secret in <code>nischal94/.github</code>, protected by GitHub-native hardening (branch protection + signed commits + TOTP MFA on the GitHub login + no <code>pull_request_target</code> workflows).</p>
+<p><strong>Tech Stack:</strong> GitHub Actions, GitHub Apps API, GitHub Rulesets API, <code>slsa-framework/slsa-github-generator</code>, <code>step-security/harden-runner</code>, <code>github/licensed</code>, Bash + GitHub CLI for scripting.</p>
+<hr>
+<h2 class="toc-heading" id="contents">Contents<a class="anchor" href="#contents" title="Permalink to this section">#</a></h2>
+<div class="toc">
+<ul>
+<li><a href="#contents">Contents</a></li>
+<li><a href="#how-to-read-this-plan">How to read this plan</a></li>
+<li><a href="#phase-summary">Phase summary</a></li>
+<li><a href="#phase-0-prerequisites-user">Phase 0 — Prerequisites [USER]</a><ul>
+<li><a href="#task-01-register-the-nischal94-policy-github-app">Task 0.1: Register the nischal94-policy GitHub App</a></li>
+<li><a href="#task-02-enable-totp-mfa-on-the-github-account">Task 0.2: Enable TOTP MFA on the GitHub account</a></li>
+<li><a href="#task-03-store-the-app-private-key-as-a-nischal94github-repo-secret">Task 0.3: Store the App private key as a nischal94/.github repo secret</a></li>
+<li><a href="#phase-0-exit-gate">Phase 0 exit gate</a></li>
+</ul>
+</li>
+<li><a href="#phase-1-seed-nischal94github-repo-claude">Phase 1 — Seed nischal94/.github repo [CLAUDE]</a><ul>
+<li><a href="#task-11-create-the-nischal94github-repo">Task 1.1: Create the nischal94/.github repo</a></li>
+<li><a href="#task-12-add-community-files-auto-supplied-to-every-repo">Task 1.2: Add community files (auto-supplied to every repo)</a></li>
+<li><a href="#task-13-add-policiescanonical-rulesetjson">Task 1.3: Add policies/canonical-ruleset.json</a></li>
+<li><a href="#task-14-add-layer-1-universal-workflows-security-gates">Task 1.4: Add Layer 1 universal workflows — security gates</a></li>
+<li><a href="#task-15-add-layer-1-universal-workflows-codeql-license-scorecard">Task 1.5: Add Layer 1 universal workflows — codeql + license + scorecard</a></li>
+<li><a href="#task-16-create-the-four-enforcement-workflows">Task 1.6: Create the four enforcement workflows</a></li>
+<li><a href="#task-17-create-the-app-canary-workflow">Task 1.7: Create the App canary workflow</a></li>
+<li><a href="#phase-1-exit-gate">Phase 1 exit gate</a></li>
+</ul>
+</li>
+<li><a href="#phase-2-install-app-first-end-to-end-smoke-test-user-claude">Phase 2 — Install App + first end-to-end smoke test [USER] + [CLAUDE]</a><ul>
+<li><a href="#task-21-install-the-app-on-the-user-account-user">Task 2.1: Install the App on the user account [USER]</a></li>
+<li><a href="#task-22-upload-app-credentials-to-nischal94github-user">Task 2.2: Upload App credentials to nischal94/.github [USER]</a></li>
+<li><a href="#task-23-first-smoke-test-manual-dispatch-of-enforce-on-poll-claude-user">Task 2.3: First smoke test — manual dispatch of enforce-on-poll [CLAUDE] + [USER]</a></li>
+<li><a href="#task-24-smoke-test-on-a-throwaway-repo-user-claude">Task 2.4: Smoke test on a throwaway repo [USER] + [CLAUDE]</a></li>
+<li><a href="#phase-2-exit-gate">Phase 2 exit gate</a></li>
+</ul>
+</li>
+<li><a href="#phase-3-refactor-nischal94repo-template-claude">Phase 3 — Refactor nischal94/repo-template [CLAUDE]</a><ul>
+<li><a href="#task-31-create-the-working-branch-in-repo-template">Task 3.1: Create the working branch in repo-template</a></li>
+<li><a href="#task-32-add-githubscripts-stack-specific-entry-points">Task 3.2: Add .github/scripts/ stack-specific entry points</a></li>
+<li><a href="#task-33-add-8-language-profile-workflows">Task 3.3: Add 8 language-profile workflows</a></li>
+<li><a href="#task-34-add-cd-workflows-release-pipeline">Task 3.4: Add CD workflows + release pipeline</a></li>
+<li><a href="#task-35-add-bootstrap-script-skeleton-files">Task 3.5: Add bootstrap script + skeleton files</a></li>
+<li><a href="#task-36-add-architecture-runbook-threat_model-templates">Task 3.6: Add ARCHITECTURE / RUNBOOK / THREAT_MODEL templates</a></li>
+<li><a href="#task-37-push-branch-and-open-pr">Task 3.7: Push branch and open PR</a></li>
+<li><a href="#phase-3-exit-gate">Phase 3 exit gate</a></li>
+</ul>
+</li>
+<li><a href="#phase-4-full-lifecycle-smoke-test-user-claude">Phase 4 — Full lifecycle smoke test [USER] + [CLAUDE]</a><ul>
+<li><a href="#task-41-merge-the-layer-2-pr-user">Task 4.1: Merge the Layer 2 PR [USER]</a></li>
+<li><a href="#task-42-create-a-fresh-test-repo-from-the-template-user">Task 4.2: Create a fresh test repo from the template [USER]</a></li>
+<li><a href="#task-43-verify-the-full-lifecycle-claude">Task 4.3: Verify the full lifecycle [CLAUDE]</a></li>
+<li><a href="#task-44-cleanup-user">Task 4.4: Cleanup [USER]</a></li>
+<li><a href="#phase-4-exit-gate">Phase 4 exit gate</a></li>
+</ul>
+</li>
+<li><a href="#phase-5-documentation-claude">Phase 5 — Documentation [CLAUDE]</a><ul>
+<li><a href="#task-51-update-nischal94github-readme">Task 5.1: Update nischal94/.github README</a></li>
+<li><a href="#task-52-update-nischal94repo-template-readme">Task 5.2: Update nischal94/repo-template README</a></li>
+</ul>
+</li>
+<li><a href="#reference">Reference</a><ul>
+<li><a href="#task-53-add-operational-runbook-for-the-app-itself">Task 5.3: Add operational runbook for the App itself</a></li>
+<li><a href="#app-stops-enforcing-canary-opens-issue">App stops enforcing (canary opens issue)</a></li>
+<li><a href="#state-file-corrupted">State file corrupted</a></li>
+<li><a href="#migration-to-organization-mode-someday">Migration to organization mode (someday)</a></li>
+<li><a href="#phase-5-exit-gate">Phase 5 exit gate</a></li>
+</ul>
+</li>
+<li><a href="#project-complete">Project complete</a></li>
+</ul>
+</div>
+<h2 id="how-to-read-this-plan">How to read this plan<a class="anchor" href="#how-to-read-this-plan" title="Permalink to this section">#</a></h2>
+<p>The plan is organized into <strong>six phases</strong>, each with a clear exit gate. Within each phase, tasks alternate between two markers:</p>
+<ul>
+<li><strong>[USER]</strong> — work that requires the human (registering apps, configuring external services, clicking UI buttons, holding hardware keys). I cannot do these.</li>
+<li><strong>[CLAUDE]</strong> — work I do via tool calls (writing files, opening PRs, running tests).</li>
+</ul>
+<p>Phases are sequential. The exit gate of each phase is a smoke test that must pass before the next phase begins. If a gate fails, do NOT proceed — debug and re-run.</p>
+<p>Within a phase, [CLAUDE] tasks are usually independent of each other and can interleave with [USER] tasks. Each task lists its files, follows TDD where applicable (failing test → implementation → passing test → commit), and shows the exact commands to run.</p>
+<h2 id="phase-summary">Phase summary<a class="anchor" href="#phase-summary" title="Permalink to this section">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>What</th>
+<th>Owner</th>
+<th>Exit gate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Phase 0</td>
+<td>Prerequisites: register App, choose secret manager, hardware MFA</td>
+<td>[USER]</td>
+<td>App registered, secret manager configured, hardware key bound</td>
+</tr>
+<tr>
+<td>Phase 1</td>
+<td><code>nischal94/.github</code> repo seeding (workflows, policies, state file scaffolding)</td>
+<td>[CLAUDE]</td>
+<td>All Layer 1 workflows pass actionlint locally</td>
+</tr>
+<tr>
+<td>Phase 2</td>
+<td>App installation + first end-to-end smoke test</td>
+<td>[USER] + [CLAUDE]</td>
+<td>Throwaway repo gets ruleset applied within 10 min of creation</td>
+</tr>
+<tr>
+<td>Phase 3</td>
+<td><code>nischal94/repo-template</code> refactor (8 language profiles, CD, license-check, bootstrap)</td>
+<td>[CLAUDE]</td>
+<td>All Layer 2 workflows pass actionlint locally</td>
+</tr>
+<tr>
+<td>Phase 4</td>
+<td>Full lifecycle smoke test (template instantiation → enforcement → CI green)</td>
+<td>[USER] + [CLAUDE]</td>
+<td>Fresh template-derived repo passes all CI on first PR</td>
+</tr>
+<tr>
+<td>Phase 5</td>
+<td>Documentation: READMEs, runbooks, threat-model templates</td>
+<td>[CLAUDE]</td>
+<td>Docs link from each new repo&rsquo;s auto-generated README</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="phase-0-prerequisites-user">Phase 0 — Prerequisites [USER]<a class="anchor" href="#phase-0-prerequisites-user" title="Permalink to this section">#</a></h2>
+<p>These are inherently human steps. Each requires you to be logged in as <code>nischal94</code> on github.com and have access to your secret-manager-of-choice.</p>
+<h3 id="task-01-register-the-nischal94-policy-github-app">Task 0.1: Register the <code>nischal94-policy</code> GitHub App<a class="anchor" href="#task-01-register-the-nischal94-policy-github-app" title="Permalink to this section">#</a></h3>
+<p><strong>Files:</strong> None — this is configured in GitHub web UI.</p>
+<ul>
+<li>[ ] <strong>Step 1: Open the GitHub App registration page</strong></li>
+</ul>
+<p>Navigate to: <code>https://github.com/settings/apps/new</code></p>
+<ul>
+<li>
+<p>[ ] <strong>Step 2: Fill in the App&rsquo;s basic identity</strong></p>
+</li>
+<li>
+<p><strong>GitHub App name</strong>: <code>nischal94-policy</code></p>
+</li>
+<li><strong>Homepage URL</strong>: <code>https://github.com/nischal94/.github</code></li>
+<li><strong>Webhook URL</strong>: leave blank (we use polling, not webhooks)</li>
+<li>
+<p><strong>Webhook → Active</strong>: uncheck</p>
+</li>
+<li>
+<p>[ ] <strong>Step 3: Set repository permissions</strong></p>
+</li>
+</ul>
+<p>Set these permissions per the spec §3.3:</p>
+<ul>
+<li><strong>Administration</strong>: Read and write</li>
+<li><strong>Metadata</strong>: Read-only</li>
+<li><strong>Contents</strong>: Read and write</li>
+<li><strong>Pull requests</strong>: Read and write</li>
+<li><strong>Issues</strong>: Read and write</li>
+<li><strong>Actions</strong>: Read-only</li>
+</ul>
+<p>Leave all other permissions at &ldquo;No access.&rdquo;</p>
+<ul>
+<li>[ ] <strong>Step 4: Set &ldquo;Where can this GitHub App be installed?&rdquo;</strong></li>
+</ul>
+<p>Choose <strong>&ldquo;Only on this account&rdquo;</strong> (locks installation scope to <code>nischal94</code>).</p>
+<ul>
+<li>[ ] <strong>Step 5: Click &ldquo;Create GitHub App&rdquo;</strong></li>
+</ul>
+<p>After creation, you land on the App&rsquo;s settings page at <code>https://github.com/settings/apps/nischal94-policy</code>.</p>
+<ul>
+<li>[ ] <strong>Step 6: Generate a private key</strong></li>
+</ul>
+<p>On the App settings page, scroll to <strong>&ldquo;Private keys&rdquo;</strong> and click <strong>&ldquo;Generate a private key&rdquo;</strong>. A <code>.pem</code> file downloads.</p>
+<p><strong>Critical:</strong> Move this file to a secure location immediately. Do NOT commit it to any repo. Do NOT email it to yourself. Treat it as you would an SSH private key.</p>
+<ul>
+<li>[ ] <strong>Step 7: Note the App ID</strong></li>
+</ul>
+<p>At the top of the App settings page, find <strong>&ldquo;App ID&rdquo;</strong> (e.g., <code>1234567</code>). Save this number — you&rsquo;ll need it in Phase 1.</p>
+<ul>
+<li>[ ] <strong>Step 8: Note the Client ID</strong></li>
+</ul>
+<p>Same page, find <strong>&ldquo;Client ID&rdquo;</strong> (e.g., <code>Iv1.abcdef0123456789</code>). Save it.</p>
+<h3 id="task-02-enable-totp-mfa-on-the-github-account">Task 0.2: Enable TOTP MFA on the GitHub account<a class="anchor" href="#task-02-enable-totp-mfa-on-the-github-account" title="Permalink to this section">#</a></h3>
+<p>This is the v0.4 trust-boundary floor (per spec §3.3c and §7.2). The
+App private key will live in a <code>nischal94/.github</code> repo secret,
+protected by your GitHub login. TOTP MFA defends against password
+reuse and credential stuffing.</p>
+<ul>
+<li>[ ] <strong>Step 1: Choose a TOTP authenticator app</strong></li>
+</ul>
+<p>Use a TOTP authenticator app of your choice (e.g.
+  <a href="https://support.google.com/accounts/answer/1066447">Google Authenticator</a>,
+  <a href="https://authy.com">Authy</a>, or your password manager&rsquo;s built-in TOTP).
+  Pick whichever you already use; all are equivalent for this purpose.</p>
+<ul>
+<li>[ ] <strong>Step 2: Enable 2FA on GitHub</strong></li>
+</ul>
+<p>Navigate to: <code>https://github.com/settings/security</code>.</p>
+<p>Click <strong>&ldquo;Enable two-factor authentication&rdquo;</strong> → choose <strong>&ldquo;Set up using an app.&rdquo;</strong></p>
+<p>Scan the QR code with your authenticator app. Enter the 6-digit code
+  to verify. GitHub displays 16 recovery codes — save them somewhere
+  safe (password manager item is fine).</p>
+<ul>
+<li>[ ] <strong>Step 3: Verify by signing out and back in</strong></li>
+</ul>
+<p>Confirm GitHub prompts for the TOTP code on the next login. If it
+  doesn&rsquo;t, 2FA isn&rsquo;t actually active — re-do Step 2.</p>
+<ul>
+<li>[ ] <strong>Step 4: (Optional but recommended) Add a YubiKey upgrade reminder</strong></li>
+</ul>
+<p>Per spec §7.2, hardware security keys close the real-time phishing
+  vector that TOTP doesn&rsquo;t. Calendar reminder for ~6 months:
+  <em>&ldquo;Buy YubiKey 5 series, enroll on GitHub, replace TOTP.&rdquo;</em> ~$50.
+  Do it when this account ever touches paying users or production
+  data with revenue impact.</p>
+<h3 id="task-03-store-the-app-private-key-as-a-nischal94github-repo-secret">Task 0.3: Store the App private key as a <code>nischal94/.github</code> repo secret<a class="anchor" href="#task-03-store-the-app-private-key-as-a-nischal94github-repo-secret" title="Permalink to this section">#</a></h3>
+<p>The spec §3.3c v0.4 design: App private key lives as a regular Actions
+secret. Trust boundary is GitHub itself, hardened by branch protection
++ TOTP MFA + no <code>pull_request_target</code> workflows.</p>
+<p>This task technically belongs in Phase 1 (the repo doesn&rsquo;t exist yet),
+but is documented here as a Phase 0 <em>prerequisite to remember</em>: you&rsquo;ll
+need the <code>.pem</code> file from Task 0.1 Step 6 still accessible when you
+reach Task 1.1 / 2.2.</p>
+<ul>
+<li>[ ] <strong>Step 1: Keep the <code>.pem</code> file in a temporary safe location</strong></li>
+</ul>
+<p>Move the downloaded <code>.pem</code> from your Downloads folder to a
+  short-lived location:</p>
+<pre><code class="language-bash">mkdir -p ~/secrets-staging &amp;&amp; chmod 700 ~/secrets-staging
+mv ~/Downloads/nischal94-policy.*.private-key.pem ~/secrets-staging/
+chmod 600 ~/secrets-staging/nischal94-policy.*.private-key.pem
+</code></pre>
+<p>This file is needed once in Task 2.2 Step 1 to populate the repo
+  secret. After that, securely delete it.</p>
+<ul>
+<li>[ ] <strong>Step 2: Confirm the App ID, Installation ID, Integration ID are noted</strong></li>
+</ul>
+<p>These three values are <em>not</em> secrets — they&rsquo;re public identifiers
+  that appear in every API URL. They will become repo <em>variables</em>
+  (not secrets) in Task 2.2:
+  - <strong>App ID</strong>: from Task 0.1 Step 7 (e.g., <code>1234567</code>)
+  - <strong>Client ID</strong>: from Task 0.1 Step 8
+  - <strong>Installation ID</strong>: noted in Task 2.1 Step 3 (after you install
+    the App in Phase 2)
+  - <strong>Integration ID</strong>: noted in Task 2.1 Step 4</p>
+<p>Save these in a note/document — you&rsquo;ll paste them into the GitHub
+  variables UI in Task 2.2.</p>
+<h3 id="phase-0-exit-gate">Phase 0 exit gate<a class="anchor" href="#phase-0-exit-gate" title="Permalink to this section">#</a></h3>
+<p>Before proceeding to Phase 1, confirm:</p>
+<ul>
+<li>[ ] GitHub App <code>nischal94-policy</code> exists at <code>https://github.com/settings/apps/nischal94-policy</code>.</li>
+<li>[ ] App ID and Client ID noted.</li>
+<li>[ ] TOTP MFA enabled on <code>nischal94</code> GitHub account; verified by sign-out/sign-in.</li>
+<li>[ ] GitHub recovery codes saved.</li>
+<li>[ ] <code>.pem</code> private key file moved to <code>~/secrets-staging/</code> with <code>chmod 600</code> (will be uploaded to repo secrets in Task 2.2, then deleted).</li>
+</ul>
+<p>If any of these is incomplete, do NOT proceed. The Phase 1 work assumes all of these are done.</p>
+<p><strong>What changed from v0.3 plan</strong>: dropped external secret manager
+(1Password Connect) setup, OIDC trust policy configuration, and
+hardware-MFA-on-secret-manager-root. Per spec v0.4 §3.3c, the App key
+now lives as a repo secret in <code>nischal94/.github</code>, protected by
+GitHub-native hardening rather than external secret management. See
+spec changelog v0.4 entry for the full rationale.</p>
+<hr>
+<h2 id="phase-1-seed-nischal94github-repo-claude">Phase 1 — Seed <code>nischal94/.github</code> repo [CLAUDE]<a class="anchor" href="#phase-1-seed-nischal94github-repo-claude" title="Permalink to this section">#</a></h2>
+<p>This phase creates the Layer 1 repo and populates it with all the universal infrastructure: community files, policies, four enforcement workflows, and the canary.</p>
+<h3 id="task-11-create-the-nischal94github-repo">Task 1.1: Create the <code>nischal94/.github</code> repo<a class="anchor" href="#task-11-create-the-nischal94github-repo" title="Permalink to this section">#</a></h3>
+<p><strong>Files:</strong> None locally yet — this creates a remote repo.</p>
+<ul>
+<li>[ ] <strong>Step 1: Create the repo via gh CLI</strong></li>
+</ul>
+<pre><code class="language-bash">gh repo create nischal94/.github \
+  --public \
+  --description &quot;Account-level CI policy and community files for nischal94 repos.&quot; \
+  --add-readme=false
+</code></pre>
+<p>Expected: returns a URL like <code>https://github.com/nischal94/.github</code>.</p>
+<ul>
+<li>[ ] <strong>Step 2: Clone it locally</strong></li>
+</ul>
+<pre><code class="language-bash">git clone git@github.com:nischal94/.github.git ~/projects/nischal94-dot-github
+cd ~/projects/nischal94-dot-github
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Initialize a basic README</strong></li>
+</ul>
+<p>Create <code>README.md</code>:</p>
+<pre><code class="language-markdown"># nischal94/.github
+
+Account-level CI policy + community files. Auto-supplied to every
+repo on this account. See `docs/POLICIES.md` for what enforces here.
+
+Implementation reference: [`nischal94/repo-template` v0.3 spec](https://github.com/nischal94/repo-template/blob/main/docs/specs/2026-05-09-enterprise-ci-template-design.md).
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Commit and push</strong></li>
+</ul>
+<pre><code class="language-bash">git add README.md
+git commit -m &quot;docs: initial README&quot;
+git push origin main
+</code></pre>
+<h3 id="task-12-add-community-files-auto-supplied-to-every-repo">Task 1.2: Add community files (auto-supplied to every repo)<a class="anchor" href="#task-12-add-community-files-auto-supplied-to-every-repo" title="Permalink to this section">#</a></h3>
+<p><strong>Files:</strong>
+- Create: <code>SECURITY.md</code>
+- Create: <code>CODE_OF_CONDUCT.md</code>
+- Create: <code>CODEOWNERS</code>
+- Create: <code>.github/dependabot.yml</code>
+- Create: <code>.github/PULL_REQUEST_TEMPLATE.md</code>
+- Create: <code>.github/ISSUE_TEMPLATE/bug.yml</code>
+- Create: <code>.github/ISSUE_TEMPLATE/feature.yml</code>
+- Create: <code>.github/ISSUE_TEMPLATE/security.yml</code>
+- Create: <code>.github/FUNDING.yml</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Create <code>SECURITY.md</code></strong></li>
+</ul>
+<pre><code class="language-markdown"># Security Policy
+
+## Reporting
+
+Send disclosures privately to security@nischal.dev (or open a private
+security advisory at the affected repo's Security tab → Report a vulnerability).
+
+Do NOT open public issues for security bugs.
+
+## Response time
+
+Acknowledgement within 48 hours. Triage within 7 days.
+
+## Scope
+
+All public repos on github.com/nischal94 are in scope. Vendored
+dependencies are out of scope (report upstream).
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Create <code>CODE_OF_CONDUCT.md</code></strong></li>
+</ul>
+<p>Use the <a href="https://www.contributor-covenant.org/version/2/1/code_of_conduct/">Contributor Covenant 2.1</a> verbatim. Replace the placeholder contact line with:</p>
+<pre><code>Reports go to: security@nischal.dev
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Create <code>CODEOWNERS</code></strong></li>
+</ul>
+<pre><code>* @nischal94
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Create <code>.github/dependabot.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      gh-actions:
+        patterns: [&quot;*&quot;]
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: Create <code>.github/PULL_REQUEST_TEMPLATE.md</code></strong></li>
+</ul>
+<pre><code class="language-markdown">## Summary
+&lt;!-- 1-3 bullets on what this PR does and why --&gt;
+
+## Test plan
+- [ ] &lt;!-- how you verified this works --&gt;
+
+## Checklist
+- [ ] Conventional Commit title (feat:, fix:, docs:, etc.)
+- [ ] No unrelated changes
+- [ ] Tests added or updated
+- [ ] Threat model updated if security-relevant
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 6: Create the three issue templates</strong></li>
+</ul>
+<p><code>.github/ISSUE_TEMPLATE/bug.yml</code>:</p>
+<pre><code class="language-yaml">name: Bug report
+description: Something works incorrectly
+labels: [&quot;bug&quot;]
+body:
+  - type: textarea
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Repro steps
+      description: Numbered steps to reproduce
+    validations:
+      required: true
+</code></pre>
+<p><code>.github/ISSUE_TEMPLATE/feature.yml</code>:</p>
+<pre><code class="language-yaml">name: Feature request
+description: Propose a change or addition
+labels: [&quot;enhancement&quot;]
+body:
+  - type: textarea
+    attributes:
+      label: What problem are you solving?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Proposed solution
+    validations:
+      required: false
+</code></pre>
+<p><code>.github/ISSUE_TEMPLATE/security.yml</code>:</p>
+<pre><code class="language-yaml">name: Security report (use private advisory instead)
+description: Public security reports are NOT accepted here.
+labels: [&quot;security&quot;]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **STOP.** Do not file public security issues.
+        Use the repo's Security tab → &quot;Report a vulnerability&quot;
+        to file a private advisory instead, or email security@nischal.dev.
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 7: Create <code>.github/FUNDING.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml"># Empty stub — populate when there's something to link.
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 8: Commit and push</strong></li>
+</ul>
+<pre><code class="language-bash">git add SECURITY.md CODE_OF_CONDUCT.md CODEOWNERS .github/
+git commit -m &quot;feat: add community files (auto-supplied to every repo)&quot;
+git push origin main
+</code></pre>
+<h3 id="task-13-add-policiescanonical-rulesetjson">Task 1.3: Add policies/canonical-ruleset.json<a class="anchor" href="#task-13-add-policiescanonical-rulesetjson" title="Permalink to this section">#</a></h3>
+<p><strong>Files:</strong>
+- Create: <code>policies/canonical-ruleset.json</code>
+- Create: <code>policies/required-checks.yml</code>
+- Create: <code>policies/license-config.yml</code></p>
+<p>This file is the source-of-truth ruleset that the App applies to every repo&rsquo;s <code>main</code>.</p>
+<ul>
+<li>[ ] <strong>Step 1: Create <code>policies/canonical-ruleset.json</code></strong></li>
+</ul>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;nischal94 canonical main protection&quot;,
+  &quot;target&quot;: &quot;branch&quot;,
+  &quot;enforcement&quot;: &quot;active&quot;,
+  &quot;conditions&quot;: {
+    &quot;ref_name&quot;: {
+      &quot;include&quot;: [&quot;refs/heads/main&quot;],
+      &quot;exclude&quot;: []
+    }
+  },
+  &quot;rules&quot;: [
+    { &quot;type&quot;: &quot;deletion&quot; },
+    { &quot;type&quot;: &quot;non_fast_forward&quot; },
+    { &quot;type&quot;: &quot;required_signatures&quot; },
+    {
+      &quot;type&quot;: &quot;pull_request&quot;,
+      &quot;parameters&quot;: {
+        &quot;required_approving_review_count&quot;: 1,
+        &quot;dismiss_stale_reviews_on_push&quot;: true,
+        &quot;require_code_owner_review&quot;: true,
+        &quot;require_last_push_approval&quot;: false,
+        &quot;required_review_thread_resolution&quot;: true
+      }
+    },
+    {
+      &quot;type&quot;: &quot;required_status_checks&quot;,
+      &quot;parameters&quot;: {
+        &quot;strict_required_status_checks_policy&quot;: true,
+        &quot;required_status_checks&quot;: [
+          { &quot;context&quot;: &quot;gitleaks&quot; },
+          { &quot;context&quot;: &quot;dependency-review&quot; },
+          { &quot;context&quot;: &quot;osv-scanner&quot; },
+          { &quot;context&quot;: &quot;actionlint&quot; },
+          { &quot;context&quot;: &quot;pin-actions&quot; },
+          { &quot;context&quot;: &quot;Validate PR title&quot; },
+          { &quot;context&quot;: &quot;license-check&quot; }
+        ]
+      }
+    }
+  ],
+  &quot;bypass_actors&quot;: [
+    {
+      &quot;actor_id&quot;: &quot;REPLACE_WITH_APP_INTEGRATION_ID&quot;,
+      &quot;actor_type&quot;: &quot;Integration&quot;,
+      &quot;bypass_mode&quot;: &quot;always&quot;
+    }
+  ]
+}
+</code></pre>
+<p><strong>Note</strong>: the <code>actor_id</code> placeholder will be replaced in Task 2.2 once the App is installed and you can read its integration ID. Leave it as the literal string for now.</p>
+<ul>
+<li>[ ] <strong>Step 2: Create <code>policies/required-checks.yml</code></strong></li>
+</ul>
+<p>This is a human-readable companion to the JSON ruleset, listing each required check and why.</p>
+<pre><code class="language-yaml"># Required status checks for main on every nischal94 repo.
+# Source of truth: policies/canonical-ruleset.json
+# This file is the human-readable explanation.
+
+required_checks:
+  - name: gitleaks
+    purpose: Secret scanning on every diff and full history.
+    blocks_on: high-entropy strings matching known secret patterns.
+  - name: dependency-review
+    purpose: GitHub-native PR-diff CVE check.
+    blocks_on: any new dep with high-severity CVE.
+  - name: osv-scanner
+    purpose: Full lockfile CVE scan.
+    blocks_on: any transitive dep with high-severity CVE.
+  - name: actionlint
+    purpose: Workflow YAML lint.
+    blocks_on: malformed action references, invalid syntax.
+  - name: pin-actions
+    purpose: Supply-chain hardening.
+    blocks_on: any 'uses:' referencing a tag/branch instead of SHA.
+    exceptions:
+      - slsa-framework/* (SLSA tag-pinning required, see spec §4.6)
+  - name: Validate PR title
+    purpose: Conventional Commits enforcement.
+    blocks_on: PR titles not matching feat:/fix:/docs:/refactor:/test:/chore:.
+  - name: license-check
+    purpose: Block disallowed licenses.
+    blocks_on: copyleft (GPL family) and unknown licenses absent from
+      LICENSE-OVERRIDE.md.
+
+release_time_required:
+  - name: sbom-on-release
+    purpose: CycloneDX SBOM generation.
+  - name: attest-build-provenance
+    purpose: SLSA Build L3 in-toto attestation via slsa-github-generator.
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Create <code>policies/license-config.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml"># github/licensed v4 configuration.
+# See https://github.com/github/licensed/blob/main/docs/configuration.md
+
+sources:
+  npm: true
+  pip: true
+  go: true
+  cargo: true
+  bundler: true
+
+allowed:
+  - mit
+  - apache-2.0
+  - bsd-2-clause
+  - bsd-3-clause
+  - isc
+  - 0bsd
+  - unlicense
+  - mpl-2.0
+  - cc0-1.0
+
+reviewed:
+  # Populated per-repo via LICENSE-OVERRIDE.md merging.
+
+ignored:
+  # Test-only deps that cannot affect distribution.
+  npm:
+    - &quot;@types/*&quot;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Commit and push</strong></li>
+</ul>
+<pre><code class="language-bash">git add policies/
+git commit -m &quot;feat: add canonical ruleset, required checks, license config&quot;
+git push origin main
+</code></pre>
+<h3 id="task-14-add-layer-1-universal-workflows-security-gates">Task 1.4: Add Layer 1 universal workflows — security gates<a class="anchor" href="#task-14-add-layer-1-universal-workflows-security-gates" title="Permalink to this section">#</a></h3>
+<p><strong>Files:</strong>
+- Create: <code>.github/workflows/gitleaks.yml</code>
+- Create: <code>.github/workflows/dependency-review.yml</code>
+- Create: <code>.github/workflows/osv-scanner.yml</code>
+- Create: <code>.github/workflows/actionlint.yml</code>
+- Create: <code>.github/workflows/pin-actions.yml</code>
+- Create: <code>.github/workflows/pr-title.yml</code></p>
+<p>These workflows live as <strong>canonical sources</strong> in <code>nischal94/.github</code> and are synced to every repo by <code>scaffold-on-poll.yml</code> (Task 1.6).</p>
+<ul>
+<li>[ ] <strong>Step 1: Create <code>gitleaks.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: gitleaks
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Create <code>dependency-review.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: dependency-review
+on:
+  pull_request:
+permissions:
+  contents: read
+  pull-requests: write
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - uses: actions/dependency-review-action@5a2ce3f5b92ee19cbb1541a4984c76d921601d7c # v4.3.4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Create <code>osv-scanner.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: osv-scanner
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: &quot;0 12 * * 1&quot;
+permissions:
+  contents: read
+  security-events: write
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  osv-scanner:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - uses: google/osv-scanner-action/osv-scanner-action@75a3a445eddabfdb83b76814b16f917edc4b8cf2 # v1.9.0
+        with:
+          scan-args: |-
+            --recursive
+            --skip-git
+            ./
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Create <code>actionlint.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: actionlint
+on:
+  pull_request:
+    paths:
+      - &quot;.github/workflows/**&quot;
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Install actionlint
+        run: |
+          bash &lt;(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+      - name: Run actionlint
+        run: ./actionlint -color
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: Create <code>pin-actions.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: pin-actions
+on:
+  pull_request:
+    paths:
+      - &quot;.github/workflows/**&quot;
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  pin-actions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Verify all uses: are SHA-pinned (with slsa-framework exception)
+        run: |
+          set -euo pipefail
+          BAD=$(grep -rE '^\s*-\s*uses:\s+[^@]+@(v[0-9]|main|master|latest)' .github/workflows/ \
+            | grep -vE 'slsa-framework/' || true)
+          if [ -n &quot;$BAD&quot; ]; then
+            echo &quot;::error::Found tag-pinned actions (must be SHA-pinned):&quot;
+            echo &quot;$BAD&quot;
+            exit 1
+          fi
+          echo &quot;All actions SHA-pinned (slsa-framework excepted per spec §4.6).&quot;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 6: Create <code>pr-title.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: Validate PR title
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+permissions:
+  contents: read
+  pull-requests: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate-pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: amannn/action-semantic-pull-request@0723387faaf9b38adef4775cd42cfd5155ed6017 # v5.5.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            refactor
+            test
+            chore
+            build
+            ci
+            perf
+            style
+          requireScope: false
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 7: Run actionlint locally on all six</strong></li>
+</ul>
+<pre><code class="language-bash">curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash | bash
+./actionlint -color .github/workflows/*.yml
+</code></pre>
+<p>Expected: no output (clean pass). If errors, fix the YAML and re-run.</p>
+<ul>
+<li>[ ] <strong>Step 8: Commit and push</strong></li>
+</ul>
+<pre><code class="language-bash">git add .github/workflows/{gitleaks,dependency-review,osv-scanner,actionlint,pin-actions,pr-title}.yml
+git commit -m &quot;feat(workflows): add 6 universal security gates&quot;
+git push origin main
+</code></pre>
+<h3 id="task-15-add-layer-1-universal-workflows-codeql-license-scorecard">Task 1.5: Add Layer 1 universal workflows — codeql + license + scorecard<a class="anchor" href="#task-15-add-layer-1-universal-workflows-codeql-license-scorecard" title="Permalink to this section">#</a></h3>
+<p><strong>Files:</strong>
+- Create: <code>.github/workflows/codeql.yml</code>
+- Create: <code>.github/workflows/license-check.yml</code>
+- Create: <code>.github/workflows/scorecard.yml</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Create <code>codeql.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: codeql
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: &quot;0 14 * * 1&quot;
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, javascript-typescript, python, go]
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - uses: github/codeql-action/init@b611370bb5703a7efb587f9d136a52ea24c5c38c # v3.25.11
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+      - uses: github/codeql-action/analyze@b611370bb5703a7efb587f9d136a52ea24c5c38c # v3.25.11
+        with:
+          category: &quot;/language:${{ matrix.language }}&quot;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Create <code>license-check.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: license-check
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  license-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - uses: ruby/setup-ruby@af848b40be8bb463a751551a1180d74782ba8a72 # v1.196.0
+        with:
+          ruby-version: &quot;3.2&quot;
+      - name: Install github/licensed
+        run: gem install licensed -v 4.4.0
+      - name: Merge LICENSE-OVERRIDE.md into licensed config
+        run: |
+          if [ -f LICENSE-OVERRIDE.md ]; then
+            echo &quot;Found LICENSE-OVERRIDE.md; merging into reviewed list.&quot;
+            # Expected format per line: &lt;package&gt;@&lt;version&gt;: &lt;license&gt; — &lt;reason&gt;
+            # Parse and append to .licensed.yml's `reviewed:` section.
+            # See policies/license-config.yml for the source schema.
+            python3 -c &quot;
+          import yaml, re, sys
+          override = open('LICENSE-OVERRIDE.md').read()
+          cfg = yaml.safe_load(open('.licensed.yml')) if open('.licensed.yml', 'r').readable() else {}
+          cfg.setdefault('reviewed', {})
+          for line in override.splitlines():
+              m = re.match(r'-\s+\`([^@]+)@([^\`]+)\`:\s+(\S+)\s+—', line)
+              if m:
+                  pkg, ver, lic = m.group(1), m.group(2), m.group(3)
+                  cfg['reviewed'].setdefault('any', []).append(f'{pkg}@{ver}')
+          yaml.safe_dump(cfg, open('.licensed.yml', 'w'))
+          &quot;
+          fi
+      - name: Run licensed
+        run: licensed cache &amp;&amp; licensed status
+</code></pre>
+<p><strong>Note</strong>: this workflow expects <code>.licensed.yml</code> in the repo (synced from
+  <code>policies/license-config.yml</code> by scaffold-on-poll, Task 1.6). The
+  <code>LICENSE-OVERRIDE.md</code> parsing is best-effort; if it errors, license-check
+  fails closed (correct behavior for a security gate).</p>
+<ul>
+<li>[ ] <strong>Step 3: Create <code>scorecard.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: scorecard
+on:
+  branch_protection_rule:
+  schedule:
+    - cron: &quot;0 13 * * 1&quot;
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  security-events: write
+  id-token: write
+  actions: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@62b2cac7ed8198b15735ed49ab1e5cf35480ba46 # v2.4.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
+        with:
+          name: scorecard-results
+          path: results.sarif
+          retention-days: 5
+      - uses: github/codeql-action/upload-sarif@b611370bb5703a7efb587f9d136a52ea24c5c38c # v3.25.11
+        with:
+          sarif_file: results.sarif
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Run actionlint and commit</strong></li>
+</ul>
+<pre><code class="language-bash">./actionlint -color .github/workflows/*.yml
+git add .github/workflows/{codeql,license-check,scorecard}.yml
+git commit -m &quot;feat(workflows): add codeql, license-check, scorecard&quot;
+git push origin main
+</code></pre>
+<h3 id="task-16-create-the-four-enforcement-workflows">Task 1.6: Create the four enforcement workflows<a class="anchor" href="#task-16-create-the-four-enforcement-workflows" title="Permalink to this section">#</a></h3>
+<p><strong>Files:</strong>
+- Create: <code>.github/workflows/enforce-on-poll.yml</code>
+- Create: <code>.github/workflows/scaffold-on-poll.yml</code>
+- Create: <code>.github/workflows/drift-audit.yml</code>
+- Create: <code>.github/workflows/force-sync.yml</code>
+- Create: <code>state/configured-repos.json</code> (initial empty state)
+- Create: <code>scripts/policy/lib.sh</code> (shared bash helpers)</p>
+<p>These are the App-driven workflows. Each mints an installation token, calls the GitHub API, and updates <code>state/configured-repos.json</code>.</p>
+<ul>
+<li>[ ] <strong>Step 1: Create <code>state/configured-repos.json</code> with empty initial state</strong></li>
+</ul>
+<pre><code class="language-json">{
+  &quot;schemaVersion&quot;: 1,
+  &quot;lastSyncAt&quot;: null,
+  &quot;appInstallationId&quot;: null,
+  &quot;repos&quot;: {}
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Create <code>scripts/policy/lib.sh</code> with shared helpers</strong></li>
+</ul>
+<pre><code class="language-bash">#!/usr/bin/env bash
+# Shared helpers for the four App-driven policy workflows.
+# Sourced by enforce-on-poll, scaffold-on-poll, drift-audit, force-sync.
+set -euo pipefail
+
+# mint_installation_token: produces a 1-hour scoped token from the App JWT.
+# Requires env: APP_ID, APP_PRIVATE_KEY (PEM), APP_INSTALLATION_ID.
+mint_installation_token() {
+  local jwt
+  jwt=$(generate_jwt)
+  curl -sSf -X POST \
+    -H &quot;Authorization: Bearer $jwt&quot; \
+    -H &quot;Accept: application/vnd.github+json&quot; \
+    &quot;https://api.github.com/app/installations/${APP_INSTALLATION_ID}/access_tokens&quot; \
+    | jq -r .token
+}
+
+# generate_jwt: produces a 9-min JWT signed by the App's private key.
+# Requires env: APP_ID, APP_PRIVATE_KEY.
+generate_jwt() {
+  local now iat exp header payload header_b64 payload_b64 sig
+  now=$(date +%s)
+  iat=$((now - 60))
+  exp=$((now + 540))
+  header='{&quot;alg&quot;:&quot;RS256&quot;,&quot;typ&quot;:&quot;JWT&quot;}'
+  payload=&quot;{\&quot;iat\&quot;:${iat},\&quot;exp\&quot;:${exp},\&quot;iss\&quot;:\&quot;${APP_ID}\&quot;}&quot;
+  header_b64=$(printf '%s' &quot;$header&quot; | base64 -w0 | tr '+/' '-_' | tr -d '=')
+  payload_b64=$(printf '%s' &quot;$payload&quot; | base64 -w0 | tr '+/' '-_' | tr -d '=')
+  sig=$(printf '%s.%s' &quot;$header_b64&quot; &quot;$payload_b64&quot; \
+    | openssl dgst -sha256 -sign &lt;(printf '%s' &quot;$APP_PRIVATE_KEY&quot;) \
+    | base64 -w0 | tr '+/' '-_' | tr -d '=')
+  printf '%s.%s.%s' &quot;$header_b64&quot; &quot;$payload_b64&quot; &quot;$sig&quot;
+}
+
+# list_installation_repos: returns a JSON array of full_names for repos the
+# App is installed on.
+list_installation_repos() {
+  local token=$1
+  curl -sSf \
+    -H &quot;Authorization: token $token&quot; \
+    -H &quot;Accept: application/vnd.github+json&quot; \
+    &quot;https://api.github.com/installation/repositories?per_page=100&quot; \
+    | jq -r '.repositories[].full_name'
+}
+
+# apply_canonical_ruleset: PUTs the ruleset to the given repo.
+# Args: token, owner/repo, path-to-ruleset-json.
+apply_canonical_ruleset() {
+  local token=$1
+  local repo=$2
+  local ruleset_file=$3
+  # Validate APP_INTEGRATION_ID is set and numeric before substitution.
+  # --argjson silently produces malformed JSON if given empty/non-numeric input.
+  if [[ -z &quot;${APP_INTEGRATION_ID:-}&quot; ]] || ! [[ &quot;$APP_INTEGRATION_ID&quot; =~ ^[0-9]+$ ]]; then
+    echo &quot;::error::APP_INTEGRATION_ID is unset or non-numeric: '${APP_INTEGRATION_ID:-}'&quot;
+    return 1
+  fi
+  # Substitute the App integration ID into the bypass_actors placeholder.
+  local ruleset
+  ruleset=$(jq --argjson app_id &quot;$APP_INTEGRATION_ID&quot; \
+    '(.bypass_actors[] | select(.actor_id == &quot;REPLACE_WITH_APP_INTEGRATION_ID&quot;) | .actor_id) |= $app_id' \
+    &quot;$ruleset_file&quot;)
+  # Try create; if 422 (already exists), update via PATCH.
+  local existing_id
+  existing_id=$(curl -sSf \
+    -H &quot;Authorization: token $token&quot; \
+    -H &quot;Accept: application/vnd.github+json&quot; \
+    &quot;https://api.github.com/repos/${repo}/rulesets&quot; \
+    | jq -r '.[] | select(.name == &quot;nischal94 canonical main protection&quot;) | .id')
+  if [ -n &quot;$existing_id&quot; ]; then
+    curl -sSf -X PUT \
+      -H &quot;Authorization: token $token&quot; \
+      -H &quot;Accept: application/vnd.github+json&quot; \
+      -d &quot;$ruleset&quot; \
+      &quot;https://api.github.com/repos/${repo}/rulesets/${existing_id}&quot;
+  else
+    curl -sSf -X POST \
+      -H &quot;Authorization: token $token&quot; \
+      -H &quot;Accept: application/vnd.github+json&quot; \
+      -d &quot;$ruleset&quot; \
+      &quot;https://api.github.com/repos/${repo}/rulesets&quot;
+  fi
+}
+
+# commit_state: rebases on origin/main, retries on conflict up to 3 times.
+commit_state() {
+  local message=$1
+  local attempt=1
+  while [ $attempt -le 3 ]; do
+    git add state/configured-repos.json
+    if git diff --cached --quiet; then
+      echo &quot;No state changes to commit.&quot;
+      return 0
+    fi
+    git commit -m &quot;$message&quot;
+    if git pull --rebase origin main &amp;&amp; git push origin main; then
+      return 0
+    fi
+    echo &quot;Push failed (attempt $attempt). Retrying with backoff...&quot;
+    sleep $((attempt * 5))
+    attempt=$((attempt + 1))
+  done
+  echo &quot;::error::Failed to commit state after 3 attempts. Manual intervention required.&quot;
+  exit 1
+}
+</code></pre>
+<p>Make it executable:</p>
+<pre><code class="language-bash">chmod +x scripts/policy/lib.sh
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Create <code>enforce-on-poll.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: enforce-on-poll
+on:
+  schedule:
+    - cron: &quot;*/5 * * * *&quot;
+  workflow_dispatch:
+permissions:
+  contents: write
+  id-token: write
+concurrency:
+  group: state-writer
+  cancel-in-progress: false
+jobs:
+  enforce:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set App auth env vars
+        env:
+          APP_ID: ${{ vars.APP_ID }}
+          APP_INSTALLATION_ID: ${{ vars.APP_INSTALLATION_ID }}
+          APP_INTEGRATION_ID: ${{ vars.APP_INTEGRATION_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+        run: |
+          echo &quot;APP_ID=$APP_ID&quot; &gt;&gt; &quot;$GITHUB_ENV&quot;
+          echo &quot;APP_INSTALLATION_ID=$APP_INSTALLATION_ID&quot; &gt;&gt; &quot;$GITHUB_ENV&quot;
+          echo &quot;APP_INTEGRATION_ID=$APP_INTEGRATION_ID&quot; &gt;&gt; &quot;$GITHUB_ENV&quot;
+          # APP_PRIVATE_KEY: pass via env: at the consuming step,
+          # not via GITHUB_ENV (multi-line PEM doesn't survive
+          # GITHUB_ENV's single-line-per-var format reliably).
+      - name: Apply ruleset to all installation repos
+        run: |
+          source scripts/policy/lib.sh
+          TOKEN=$(mint_installation_token)
+          for REPO in $(list_installation_repos &quot;$TOKEN&quot;); do
+            # Skip already-configured repos (per the §3.3b invariant).
+            if jq -e --arg r &quot;$REPO&quot; '.repos[$r]' state/configured-repos.json &gt; /dev/null; then
+              echo &quot;Skipping already-configured: $REPO&quot;
+              continue
+            fi
+            echo &quot;Applying ruleset to: $REPO&quot;
+            apply_canonical_ruleset &quot;$TOKEN&quot; &quot;$REPO&quot; policies/canonical-ruleset.json
+            # Record in state.
+            jq --arg r &quot;$REPO&quot; --arg now &quot;$(date -u +%Y-%m-%dT%H:%M:%SZ)&quot; \
+              '.repos[$r] = {rulesetVersion: &quot;v3&quot;, configuredAt: $now}' \
+              state/configured-repos.json &gt; state.tmp &amp;&amp; mv state.tmp state/configured-repos.json
+          done
+          jq --arg now &quot;$(date -u +%Y-%m-%dT%H:%M:%SZ)&quot; \
+            '.lastSyncAt = $now' \
+            state/configured-repos.json &gt; state.tmp &amp;&amp; mv state.tmp state/configured-repos.json
+      - name: Commit state changes
+        run: |
+          source scripts/policy/lib.sh
+          git config user.name &quot;nischal94-policy[bot]&quot;
+          git config user.email &quot;nischal94-policy[bot]@users.noreply.github.com&quot;
+          commit_state &quot;chore(policy): apply ruleset to new repos&quot;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Create <code>scaffold-on-poll.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: scaffold-on-poll
+on:
+  workflow_run:
+    workflows: [enforce-on-poll]
+    types: [completed]
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: state-writer
+  cancel-in-progress: false
+jobs:
+  scaffold:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Set App auth env vars
+        env:
+          APP_ID: ${{ vars.APP_ID }}
+          APP_INSTALLATION_ID: ${{ vars.APP_INSTALLATION_ID }}
+          APP_INTEGRATION_ID: ${{ vars.APP_INTEGRATION_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+        run: |
+          echo &quot;APP_ID=$APP_ID&quot; &gt;&gt; &quot;$GITHUB_ENV&quot;
+          echo &quot;APP_INSTALLATION_ID=$APP_INSTALLATION_ID&quot; &gt;&gt; &quot;$GITHUB_ENV&quot;
+          echo &quot;APP_INTEGRATION_ID=$APP_INTEGRATION_ID&quot; &gt;&gt; &quot;$GITHUB_ENV&quot;
+          # APP_PRIVATE_KEY: pass via env: at the consuming step,
+          # not via GITHUB_ENV (multi-line PEM doesn't survive
+          # GITHUB_ENV's single-line-per-var format reliably).
+      - name: Open scaffold PRs into newly-configured repos
+        run: |
+          source scripts/policy/lib.sh
+          TOKEN=$(mint_installation_token)
+          # Find repos in state with no scaffoldedWorkflowsVersion key set.
+          UNSCAFFOLDED=$(jq -r '.repos | to_entries[] | select(.value.scaffoldedWorkflowsVersion == null) | .key' \
+            state/configured-repos.json)
+          for REPO in $UNSCAFFOLDED; do
+            echo &quot;Scaffolding workflows into: $REPO&quot;
+            # Clone target repo.
+            TMPDIR=$(mktemp -d)
+            git clone &quot;https://x-access-token:${TOKEN}@github.com/${REPO}.git&quot; &quot;$TMPDIR&quot;
+            cd &quot;$TMPDIR&quot;
+            git checkout -b chore/scaffold-layer-1-workflows
+            mkdir -p .github/workflows
+            # Copy each Layer 1 workflow from the canonical source.
+            cp -r ../../.github/workflows/{gitleaks,dependency-review,osv-scanner,actionlint,pin-actions,pr-title,codeql,license-check,scorecard}.yml \
+              .github/workflows/
+            cp ../../policies/license-config.yml .licensed.yml
+            git add .github/ .licensed.yml
+            git commit -m &quot;chore: scaffold Layer 1 universal workflows&quot;
+            git push origin chore/scaffold-layer-1-workflows
+            # Open PR.
+            gh pr create --repo &quot;$REPO&quot; \
+              --title &quot;chore: scaffold Layer 1 universal workflows&quot; \
+              --body &quot;Auto-opened by nischal94-policy. See policies/required-checks.yml in nischal94/.github for details.&quot;
+            cd -
+          done
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: Create <code>drift-audit.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: drift-audit
+on:
+  schedule:
+    - cron: &quot;0 9 * * 0&quot;
+  workflow_dispatch:
+permissions:
+  contents: write
+  id-token: write
+  issues: write
+concurrency:
+  group: state-writer
+  cancel-in-progress: false
+jobs:
+  drift-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Set App auth env vars
+        env:
+          APP_ID: ${{ vars.APP_ID }}
+          APP_INSTALLATION_ID: ${{ vars.APP_INSTALLATION_ID }}
+          APP_INTEGRATION_ID: ${{ vars.APP_INTEGRATION_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+        run: |
+          echo &quot;APP_ID=$APP_ID&quot; &gt;&gt; &quot;$GITHUB_ENV&quot;
+          echo &quot;APP_INSTALLATION_ID=$APP_INSTALLATION_ID&quot; &gt;&gt; &quot;$GITHUB_ENV&quot;
+          echo &quot;APP_INTEGRATION_ID=$APP_INTEGRATION_ID&quot; &gt;&gt; &quot;$GITHUB_ENV&quot;
+          # APP_PRIVATE_KEY: pass via env: at the consuming step,
+          # not via GITHUB_ENV (multi-line PEM doesn't survive
+          # GITHUB_ENV's single-line-per-var format reliably).
+      - name: Audit each configured repo for drift
+        run: |
+          source scripts/policy/lib.sh
+          TOKEN=$(mint_installation_token)
+          for REPO in $(jq -r '.repos | keys[]' state/configured-repos.json); do
+            echo &quot;Auditing: $REPO&quot;
+            # Fetch active ruleset.
+            ACTIVE=$(curl -sSf \
+              -H &quot;Authorization: token $TOKEN&quot; \
+              &quot;https://api.github.com/repos/${REPO}/rulesets&quot; \
+              | jq '.[] | select(.name == &quot;nischal94 canonical main protection&quot;)')
+            if [ -z &quot;$ACTIVE&quot; ]; then
+              # Critical drift: ruleset deleted entirely.
+              echo &quot;::error::Critical drift on $REPO: ruleset missing&quot;
+              # Open or update rolling issue against nischal94/.github.
+              gh issue create --repo nischal94/.github \
+                --title &quot;policy: drift detected on $REPO/main&quot; \
+                --body &quot;Critical drift: canonical ruleset is missing on $REPO/main. Run force-sync to remediate.&quot; \
+                --label &quot;drift-critical&quot; || true
+              continue
+            fi
+            # Note: this Phase 1 implementation only checks ruleset existence.
+            # Rule-by-rule diff + auto-PR remediation (per spec §3.4) is added
+            # in a follow-up commit after Phase 2 smoke-tests pass.
+          done
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 6: Create <code>force-sync.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: force-sync
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: &quot;Repo full name (owner/repo) or 'all'&quot;
+        required: true
+        default: &quot;all&quot;
+permissions:
+  contents: write
+  id-token: write
+concurrency:
+  group: state-writer
+  cancel-in-progress: false
+jobs:
+  force-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set App auth env vars
+        env:
+          APP_ID: ${{ vars.APP_ID }}
+          APP_INSTALLATION_ID: ${{ vars.APP_INSTALLATION_ID }}
+          APP_INTEGRATION_ID: ${{ vars.APP_INTEGRATION_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+        run: |
+          echo &quot;APP_ID=$APP_ID&quot; &gt;&gt; &quot;$GITHUB_ENV&quot;
+          echo &quot;APP_INSTALLATION_ID=$APP_INSTALLATION_ID&quot; &gt;&gt; &quot;$GITHUB_ENV&quot;
+          echo &quot;APP_INTEGRATION_ID=$APP_INTEGRATION_ID&quot; &gt;&gt; &quot;$GITHUB_ENV&quot;
+          # APP_PRIVATE_KEY: pass via env: at the consuming step,
+          # not via GITHUB_ENV (multi-line PEM doesn't survive
+          # GITHUB_ENV's single-line-per-var format reliably).
+      - name: Re-apply ruleset to target(s)
+        run: |
+          source scripts/policy/lib.sh
+          TOKEN=$(mint_installation_token)
+          if [ &quot;${{ inputs.target }}&quot; = &quot;all&quot; ]; then
+            TARGETS=$(list_installation_repos &quot;$TOKEN&quot;)
+          else
+            TARGETS=&quot;${{ inputs.target }}&quot;
+          fi
+          for REPO in $TARGETS; do
+            echo &quot;Force-applying ruleset to: $REPO&quot;
+            apply_canonical_ruleset &quot;$TOKEN&quot; &quot;$REPO&quot; policies/canonical-ruleset.json
+            # Reset state entry.
+            jq --arg r &quot;$REPO&quot; --arg now &quot;$(date -u +%Y-%m-%dT%H:%M:%SZ)&quot; \
+              '.repos[$r] = {rulesetVersion: &quot;v3&quot;, configuredAt: $now, forceSyncedAt: $now}' \
+              state/configured-repos.json &gt; state.tmp &amp;&amp; mv state.tmp state/configured-repos.json
+          done
+      - name: Commit state changes
+        run: |
+          source scripts/policy/lib.sh
+          git config user.name &quot;nischal94-policy[bot]&quot;
+          git config user.email &quot;nischal94-policy[bot]@users.noreply.github.com&quot;
+          commit_state &quot;chore(policy): force-sync ruleset for ${{ inputs.target }}&quot;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 7: Run actionlint and commit</strong></li>
+</ul>
+<pre><code class="language-bash">./actionlint -color .github/workflows/*.yml
+git add .github/workflows/{enforce-on-poll,scaffold-on-poll,drift-audit,force-sync}.yml \
+        state/configured-repos.json scripts/policy/lib.sh
+git commit -m &quot;feat(policy): add four enforcement workflows + state file + helpers&quot;
+git push origin main
+</code></pre>
+<h3 id="task-17-create-the-app-canary-workflow">Task 1.7: Create the App canary workflow<a class="anchor" href="#task-17-create-the-app-canary-workflow" title="Permalink to this section">#</a></h3>
+<p><strong>Files:</strong>
+- Create: <code>.github/workflows/app-canary.yml</code></p>
+<p>This is the watchdog that detects if the App itself has been uninstalled. Uses a fine-grained PAT scoped to &ldquo;Account: Installations: read&rdquo; — the only PAT in the system per spec §7.6.</p>
+<ul>
+<li>[ ] <strong>Step 1: Create <code>app-canary.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: app-canary
+on:
+  schedule:
+    - cron: &quot;0 11 * * *&quot;
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - name: Verify nischal94-policy App is still installed
+        env:
+          CANARY_PAT: ${{ secrets.CANARY_PAT }}
+        run: |
+          set -euo pipefail
+          INSTALLATIONS=$(curl -sSf \
+            -H &quot;Authorization: token ${CANARY_PAT}&quot; \
+            -H &quot;Accept: application/vnd.github+json&quot; \
+            &quot;https://api.github.com/user/installations&quot; \
+            | jq -r '.installations[].app_slug')
+          if echo &quot;$INSTALLATIONS&quot; | grep -q &quot;nischal94-policy&quot;; then
+            echo &quot;App is installed. Canary green.&quot;
+          else
+            echo &quot;::error::App nischal94-policy is NOT installed!&quot;
+            gh issue create --repo nischal94/.github \
+              --title &quot;CRITICAL: nischal94-policy App is not installed&quot; \
+              --body &quot;Daily canary detected the App is missing. Re-install from https://github.com/settings/apps/nischal94-policy/installations&quot; \
+              --label &quot;canary-critical&quot; || true
+            exit 1
+          fi
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Run actionlint and commit</strong></li>
+</ul>
+<pre><code class="language-bash">./actionlint .github/workflows/app-canary.yml
+git add .github/workflows/app-canary.yml
+git commit -m &quot;feat(policy): add daily app-canary watchdog&quot;
+git push origin main
+</code></pre>
+<h3 id="phase-1-exit-gate">Phase 1 exit gate<a class="anchor" href="#phase-1-exit-gate" title="Permalink to this section">#</a></h3>
+<p>Before proceeding to Phase 2, confirm:</p>
+<ul>
+<li>[ ] <code>nischal94/.github</code> repo exists and contains all community files.</li>
+<li>[ ] All 9 universal Layer 1 workflows pass <code>actionlint -color .github/workflows/*.yml</code> locally.</li>
+<li>[ ] All 4 enforcement workflows + 1 canary present.</li>
+<li>[ ] <code>state/configured-repos.json</code> exists with empty repos object.</li>
+<li>[ ] <code>scripts/policy/lib.sh</code> exists and is executable.</li>
+<li>[ ] <code>policies/canonical-ruleset.json</code> and <code>policies/required-checks.yml</code> exist.</li>
+<li>[ ] All commits pushed to <code>main</code>.</li>
+</ul>
+<hr>
+<h2 id="phase-2-install-app-first-end-to-end-smoke-test-user-claude">Phase 2 — Install App + first end-to-end smoke test [USER] + [CLAUDE]<a class="anchor" href="#phase-2-install-app-first-end-to-end-smoke-test-user-claude" title="Permalink to this section">#</a></h2>
+<h3 id="task-21-install-the-app-on-the-user-account-user">Task 2.1: Install the App on the user account [USER]<a class="anchor" href="#task-21-install-the-app-on-the-user-account-user" title="Permalink to this section">#</a></h3>
+<ul>
+<li>[ ] <strong>Step 1: Open the App&rsquo;s installation page</strong></li>
+</ul>
+<p>Navigate to: <code>https://github.com/settings/apps/nischal94-policy/installations</code></p>
+<ul>
+<li>[ ] <strong>Step 2: Click &ldquo;Install&rdquo; next to your account</strong></li>
+</ul>
+<p>Choose <strong>&ldquo;All repositories&rdquo;</strong>. (You can change this later, but for the polling enforcer to work, it needs visibility into every repo it&rsquo;s expected to protect.)</p>
+<ul>
+<li>[ ] <strong>Step 3: Note the installation ID</strong></li>
+</ul>
+<p>After installation, the URL contains the installation ID: <code>https://github.com/settings/installations/&lt;NUMBER&gt;</code>. Save that number.</p>
+<ul>
+<li>[ ] <strong>Step 4: Note the App&rsquo;s integration ID</strong></li>
+</ul>
+<p>Run:</p>
+<pre><code class="language-bash">gh api /user/installations --jq '.installations[] | select(.app_slug==&quot;nischal94-policy&quot;) | .target_id'
+</code></pre>
+<p>Save that number — this is the <code>actor_id</code> used in <code>bypass_actors</code>.</p>
+<ul>
+<li>[ ] <strong>Step 5: Note installation_id and integration_id</strong></li>
+</ul>
+<p>Save these alongside the App ID and Client ID from Phase 0 Task 0.1.
+  They&rsquo;ll be uploaded as repo <em>variables</em> (not secrets — they&rsquo;re public
+  identifiers) in the next task.</p>
+<h3 id="task-22-upload-app-credentials-to-nischal94github-user">Task 2.2: Upload App credentials to <code>nischal94/.github</code> [USER]<a class="anchor" href="#task-22-upload-app-credentials-to-nischal94github-user" title="Permalink to this section">#</a></h3>
+<ul>
+<li>[ ] <strong>Step 1: Upload the App private key as a repo secret</strong></li>
+</ul>
+<pre><code class="language-bash">cd ~/projects/nischal94-dot-github
+gh secret set APP_PRIVATE_KEY &lt; ~/secrets-staging/nischal94-policy.*.private-key.pem
+</code></pre>
+<p>This reads the <code>.pem</code> file from the staging location (Phase 0 Task 0.3
+  Step 1) and uploads its contents as the <code>APP_PRIVATE_KEY</code> repo secret.</p>
+<ul>
+<li>[ ] <strong>Step 2: Upload App identifiers as repo variables</strong></li>
+</ul>
+<pre><code class="language-bash">gh variable set APP_ID --body &quot;&lt;App ID from Task 0.1 Step 7&gt;&quot;
+gh variable set APP_INSTALLATION_ID --body &quot;&lt;Installation ID from Task 2.1 Step 3&gt;&quot;
+gh variable set APP_INTEGRATION_ID --body &quot;&lt;Integration ID from Task 2.1 Step 4&gt;&quot;
+</code></pre>
+<p>Replace each <code>&lt;...&gt;</code> placeholder with the actual numeric value.
+  These are not secrets — they appear in every API URL — but storing
+  them as variables keeps the workflows clean.</p>
+<ul>
+<li>[ ] <strong>Step 3: Securely delete the local <code>.pem</code> file</strong></li>
+</ul>
+<p>Now that the key is uploaded, remove the local copy:</p>
+<pre><code class="language-bash">shred -u ~/secrets-staging/nischal94-policy.*.private-key.pem
+rmdir ~/secrets-staging
+</code></pre>
+<p>(<code>shred</code> overwrites then unlinks. macOS users without <code>shred</code>:
+  <code>rm -P</code> is the closest equivalent.)</p>
+<ul>
+<li>[ ] <strong>Step 4: Create a fine-grained PAT for the canary</strong></li>
+</ul>
+<p>Navigate to: <code>https://github.com/settings/personal-access-tokens/new</code>.
+  - <strong>Token name</strong>: <code>nischal94-policy canary</code>
+  - <strong>Resource owner</strong>: <code>nischal94</code>
+  - <strong>Repository access</strong>: <code>Public repositories (read-only)</code>
+  - <strong>Account permissions</strong>: <code>Installations: Read-only</code>
+  - <strong>Expiration</strong>: 1 year</p>
+<p>Create; copy the token.</p>
+<ul>
+<li>[ ] <strong>Step 5: Set <code>CANARY_PAT</code> secret</strong></li>
+</ul>
+<pre><code class="language-bash">gh secret set CANARY_PAT
+# paste the PAT
+</code></pre>
+<p>Calendar reminder: rotate this PAT in 1 year (set for ~11 months
+  to give you a buffer).</p>
+<ul>
+<li>[ ] <strong>Step 6: Verify all repo secrets and variables are in place</strong></li>
+</ul>
+<pre><code class="language-bash">gh secret list  # expect: APP_PRIVATE_KEY, CANARY_PAT
+gh variable list # expect: APP_ID, APP_INSTALLATION_ID, APP_INTEGRATION_ID
+</code></pre>
+<h3 id="task-23-first-smoke-test-manual-dispatch-of-enforce-on-poll-claude-user">Task 2.3: First smoke test — manual dispatch of enforce-on-poll [CLAUDE] + [USER]<a class="anchor" href="#task-23-first-smoke-test-manual-dispatch-of-enforce-on-poll-claude-user" title="Permalink to this section">#</a></h3>
+<ul>
+<li>[ ] <strong>Step 1: Manually dispatch the workflow [USER]</strong></li>
+</ul>
+<pre><code class="language-bash">cd ~/projects/nischal94-dot-github
+gh workflow run enforce-on-poll.yml
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: (No approval gate in v0.4)</strong></li>
+</ul>
+<p>Per spec v0.4 §3.3c, the protected-environment-with-required-reviewer
+  approach was dropped. Workflows now run directly without a manual
+  approval click. The trust boundary is GitHub login + TOTP MFA + branch
+  protection on <code>nischal94/.github</code>, not an environment gate.</p>
+<ul>
+<li>[ ] <strong>Step 3: Watch the run [CLAUDE]</strong></li>
+</ul>
+<pre><code class="language-bash">gh run watch
+</code></pre>
+<p>Expected: workflow completes successfully, <code>state/configured-repos.json</code> is populated with entries for every repo the App can see.</p>
+<ul>
+<li>[ ] <strong>Step 4: Verify the ruleset was applied to <code>nischal94/.github</code> itself</strong></li>
+</ul>
+<pre><code class="language-bash">gh api repos/nischal94/.github/rulesets --jq '.[] | {id, name, enforcement}'
+</code></pre>
+<p>Expected: at least one ruleset named <code>"nischal94 canonical main protection"</code> with <code>"enforcement": "active"</code>.</p>
+<h3 id="task-24-smoke-test-on-a-throwaway-repo-user-claude">Task 2.4: Smoke test on a throwaway repo [USER] + [CLAUDE]<a class="anchor" href="#task-24-smoke-test-on-a-throwaway-repo-user-claude" title="Permalink to this section">#</a></h3>
+<ul>
+<li>[ ] <strong>Step 1: Create a throwaway repo [USER]</strong></li>
+</ul>
+<pre><code class="language-bash">gh repo create nischal94/test-enforcement-1 --public \
+  --description &quot;Throwaway smoke test for nischal94-policy enforcement.&quot;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Wait up to 10 minutes [USER]</strong></li>
+</ul>
+<p>The App polls every 5 minutes, plus GitHub&rsquo;s cron is best-effort. Set a timer; do not push to the repo during this window.</p>
+<ul>
+<li>[ ] <strong>Step 3: Verify the ruleset landed [CLAUDE]</strong></li>
+</ul>
+<pre><code class="language-bash">gh api repos/nischal94/test-enforcement-1/rulesets --jq '.[] | {id, name, enforcement}'
+</code></pre>
+<p>Expected: ruleset present and active.</p>
+<ul>
+<li>[ ] <strong>Step 4: Verify the scaffold PR was opened [CLAUDE]</strong></li>
+</ul>
+<pre><code class="language-bash">gh pr list --repo nischal94/test-enforcement-1
+</code></pre>
+<p>Expected: one PR titled <code>"chore: scaffold Layer 1 universal workflows"</code>.</p>
+<ul>
+<li>[ ] <strong>Step 5: Merge the scaffold PR [USER]</strong></li>
+</ul>
+<pre><code class="language-bash">gh pr merge --repo nischal94/test-enforcement-1 1 --squash
+</code></pre>
+<p>Wait for the workflows in <code>nischal94/test-enforcement-1</code> to run. They may fail (the test repo has no real code) but should at least <em>attempt</em> to run, proving they were synced correctly.</p>
+<ul>
+<li>[ ] <strong>Step 6: Clean up the throwaway repo [USER]</strong></li>
+</ul>
+<pre><code class="language-bash">gh repo delete nischal94/test-enforcement-1 --yes
+</code></pre>
+<h3 id="phase-2-exit-gate">Phase 2 exit gate<a class="anchor" href="#phase-2-exit-gate" title="Permalink to this section">#</a></h3>
+<p>Before proceeding to Phase 3, confirm:</p>
+<ul>
+<li>[ ] App installed on <code>nischal94</code> account.</li>
+<li>[ ] <code>APP_PRIVATE_KEY</code> and <code>CANARY_PAT</code> secrets set on <code>nischal94/.github</code>.</li>
+<li>[ ] <code>APP_ID</code>, <code>APP_INSTALLATION_ID</code>, <code>APP_INTEGRATION_ID</code> variables set on <code>nischal94/.github</code>.</li>
+<li>[ ] Local <code>.pem</code> file shredded after upload (Phase 0 staging dir empty).</li>
+<li>[ ] Manual <code>enforce-on-poll</code> dispatch succeeded (no approval gate in v0.4).</li>
+<li>[ ] Throwaway repo received the canonical ruleset within 10 min of creation.</li>
+<li>[ ] Throwaway repo received a scaffold PR with all Layer 1 workflows.</li>
+</ul>
+<p>If any fail, debug. Common failure modes:
+- <code>APP_PRIVATE_KEY</code> malformed → ensure the secret was uploaded via <code>gh secret set APP_PRIVATE_KEY &lt; file.pem</code> (file redirection preserves newlines; copy-paste into the GitHub UI sometimes mangles them).
+- App <code>bypass_actors</code> integration ID still says the placeholder string → check Task 2.1 Step 4 was completed and the value matches the App ID at https://github.com/settings/apps/nischal94-policy.
+- Concurrency lock stuck → manually cancel any orphaned <code>state-writer</code> runs.</p>
+<hr>
+<h2 id="phase-3-refactor-nischal94repo-template-claude">Phase 3 — Refactor <code>nischal94/repo-template</code> [CLAUDE]<a class="anchor" href="#phase-3-refactor-nischal94repo-template-claude" title="Permalink to this section">#</a></h2>
+<p>This phase rebuilds the Layer 2 scaffold per spec §4. Most tasks are file creation in the existing <code>nischal94/repo-template</code> repo on a feature branch.</p>
+<h3 id="task-31-create-the-working-branch-in-repo-template">Task 3.1: Create the working branch in repo-template<a class="anchor" href="#task-31-create-the-working-branch-in-repo-template" title="Permalink to this section">#</a></h3>
+<ul>
+<li>[ ] <strong>Step 1: Switch to repo-template and create branch</strong></li>
+</ul>
+<pre><code class="language-bash">cd ~/projects/repo-template
+git checkout main
+git pull origin main
+git checkout -b feat/layer-2-refactor
+</code></pre>
+<h3 id="task-32-add-githubscripts-stack-specific-entry-points">Task 3.2: Add <code>.github/scripts/</code> stack-specific entry points<a class="anchor" href="#task-32-add-githubscripts-stack-specific-entry-points" title="Permalink to this section">#</a></h3>
+<p><strong>Files:</strong>
+- Create: <code>.github/scripts/ci-node.sh</code>
+- Create: <code>.github/scripts/ci-python.sh</code>
+- Create: <code>.github/scripts/ci-go.sh</code>
+- Create: <code>.github/scripts/ci-shell.sh</code>
+- Create: <code>.github/scripts/ci-docker.sh</code>
+- Create: <code>.github/scripts/ci-sql.sh</code>
+- Create: <code>.github/scripts/ci-e2e.sh</code>
+- Create: <code>.github/scripts/ci-docs.sh</code>
+- Create: <code>.github/scripts/cd-deploy.sh</code>
+- Create: <code>.github/scripts/cd-smoke.sh</code></p>
+<p>Each script is the actual CI contract called by the corresponding workflow. The Makefile is developer-only per spec §4.2.</p>
+<ul>
+<li>[ ] <strong>Step 1: Create <code>ci-node.sh</code></strong></li>
+</ul>
+<pre><code class="language-bash">#!/usr/bin/env bash
+# CI entry point for Node projects. Called by .github/workflows/ci-node.yml.
+set -euo pipefail
+echo &quot;==&gt; Installing deps...&quot;
+if [ -f package-lock.json ]; then
+  npm ci
+elif [ -f pnpm-lock.yaml ]; then
+  npx pnpm i --frozen-lockfile
+elif [ -f yarn.lock ]; then
+  yarn install --frozen-lockfile
+else
+  npm i
+fi
+echo &quot;==&gt; Lint...&quot;
+npm run lint --if-present
+echo &quot;==&gt; Typecheck...&quot;
+npm run typecheck --if-present || npx tsc --noEmit
+echo &quot;==&gt; Test...&quot;
+npm test --if-present
+echo &quot;==&gt; Coverage...&quot;
+npm run test:coverage --if-present
+echo &quot;==&gt; Build...&quot;
+npm run build --if-present
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Create <code>ci-python.sh</code></strong></li>
+</ul>
+<pre><code class="language-bash">#!/usr/bin/env bash
+set -euo pipefail
+echo &quot;==&gt; Installing deps...&quot;
+if [ -f pyproject.toml ]; then
+  pip install -e &quot;.[dev,test]&quot; || pip install -e .
+fi
+if [ -f requirements.txt ]; then
+  pip install -r requirements.txt
+fi
+if [ -f requirements-dev.txt ]; then
+  pip install -r requirements-dev.txt
+fi
+echo &quot;==&gt; Lint (ruff)...&quot;
+ruff check .
+echo &quot;==&gt; Format check (ruff format)...&quot;
+ruff format --check .
+echo &quot;==&gt; Typecheck (mypy)...&quot;
+mypy . || true # mypy as advisory until type-clean
+echo &quot;==&gt; Test (pytest)...&quot;
+pytest --cov --cov-report=xml --cov-report=term
+echo &quot;==&gt; Audit (pip-audit)...&quot;
+pip-audit
+echo &quot;==&gt; Bandit...&quot;
+bandit -r . -ll
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Create <code>ci-go.sh</code></strong></li>
+</ul>
+<pre><code class="language-bash">#!/usr/bin/env bash
+set -euo pipefail
+echo &quot;==&gt; go mod download...&quot;
+go mod download
+echo &quot;==&gt; go vet...&quot;
+go vet ./...
+echo &quot;==&gt; staticcheck...&quot;
+go install honnef.co/go/tools/cmd/staticcheck@latest
+staticcheck ./...
+echo &quot;==&gt; govulncheck...&quot;
+go install golang.org/x/vuln/cmd/govulncheck@latest
+govulncheck ./...
+echo &quot;==&gt; Test with race + coverage...&quot;
+go test -race -coverprofile=coverage.out -covermode=atomic ./...
+echo &quot;==&gt; Build...&quot;
+go build ./...
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Create <code>ci-shell.sh</code></strong></li>
+</ul>
+<pre><code class="language-bash">#!/usr/bin/env bash
+set -euo pipefail
+echo &quot;==&gt; shellcheck...&quot;
+find . -name &quot;*.sh&quot; -not -path &quot;./node_modules/*&quot; -not -path &quot;./.git/*&quot; \
+  -exec shellcheck {} +
+echo &quot;==&gt; shfmt --diff...&quot;
+find . -name &quot;*.sh&quot; -not -path &quot;./node_modules/*&quot; -not -path &quot;./.git/*&quot; \
+  -exec shfmt --diff {} +
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: Create <code>ci-docker.sh</code></strong></li>
+</ul>
+<pre><code class="language-bash">#!/usr/bin/env bash
+set -euo pipefail
+echo &quot;==&gt; hadolint...&quot;
+if [ -f Dockerfile ]; then
+  docker run --rm -i hadolint/hadolint &lt; Dockerfile
+fi
+echo &quot;==&gt; Build image...&quot;
+docker build -t local/test:ci .
+echo &quot;==&gt; trivy scan...&quot;
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+  aquasec/trivy:latest image --severity HIGH,CRITICAL --exit-code 1 local/test:ci
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 6: Create <code>ci-sql.sh</code></strong></li>
+</ul>
+<pre><code class="language-bash">#!/usr/bin/env bash
+set -euo pipefail
+echo &quot;==&gt; Apply migrations to ephemeral Postgres...&quot;
+# Postgres service container provides $PGHOST, $PGPORT, $PGUSER, $PGPASSWORD.
+if [ -d migrations ]; then
+  for f in migrations/*.sql; do
+    psql -f &quot;$f&quot;
+  done
+fi
+echo &quot;==&gt; drizzle-kit check (if configured)...&quot;
+if [ -f drizzle.config.ts ] || [ -f drizzle.config.js ]; then
+  npx drizzle-kit check || true # advisory in v1
+fi
+echo &quot;==&gt; Run pg-tap tests...&quot;
+if find . -name &quot;*.test.sql&quot; | grep -q .; then
+  pg_prove --recurse --pset tuples_only=1 --schema test \
+    $(find . -name &quot;*.test.sql&quot;)
+fi
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 7: Create <code>ci-e2e.sh</code></strong></li>
+</ul>
+<pre><code class="language-bash">#!/usr/bin/env bash
+set -euo pipefail
+if [ -f playwright.config.ts ] || [ -f playwright.config.js ]; then
+  echo &quot;==&gt; Install Playwright browsers...&quot;
+  npx playwright install --with-deps
+  echo &quot;==&gt; Run Playwright...&quot;
+  npx playwright test
+elif [ -f cypress.config.ts ] || [ -f cypress.config.js ]; then
+  echo &quot;==&gt; Run Cypress...&quot;
+  npx cypress run
+else
+  echo &quot;No E2E config detected; skipping.&quot;
+fi
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 8: Create <code>ci-docs.sh</code></strong></li>
+</ul>
+<pre><code class="language-bash">#!/usr/bin/env bash
+set -euo pipefail
+echo &quot;==&gt; Build docs...&quot;
+if [ -f mkdocs.yml ]; then
+  pip install mkdocs mkdocs-material
+  mkdocs build --strict
+elif [ -f docusaurus.config.ts ] || [ -f docusaurus.config.js ]; then
+  npm ci
+  npm run build
+elif [ -d docs ]; then
+  echo &quot;Plain docs/ dir, no build step. Running link-check only.&quot;
+fi
+echo &quot;==&gt; Link check...&quot;
+npx -y markdown-link-check **/*.md || true # advisory until tuned
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 9: Create <code>cd-deploy.sh</code></strong></li>
+</ul>
+<pre><code class="language-bash">#!/usr/bin/env bash
+set -euo pipefail
+if [ -f vercel.json ]; then
+  echo &quot;==&gt; Deploy to Vercel (long-lived token; documented gap §4.6)...&quot;
+  npx vercel --token=&quot;$VERCEL_TOKEN&quot; --prebuilt --prod=false
+elif [ -f fly.toml ]; then
+  echo &quot;==&gt; Deploy to Fly.io (long-lived token; documented gap §4.6)...&quot;
+  flyctl deploy --remote-only --access-token=&quot;$FLY_API_TOKEN&quot;
+elif [ -f railway.toml ]; then
+  echo &quot;==&gt; Deploy to Railway (long-lived token; documented gap §4.6)...&quot;
+  npx -y @railway/cli up --token=&quot;$RAILWAY_TOKEN&quot;
+else
+  echo &quot;No CD target detected (no vercel.json / fly.toml / railway.toml). Skipping.&quot;
+fi
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 10: Create <code>cd-smoke.sh</code></strong></li>
+</ul>
+<pre><code class="language-bash">#!/usr/bin/env bash
+set -euo pipefail
+if [ ! -f .github/smoke.yml ]; then
+  echo &quot;No .github/smoke.yml; skipping smoke check.&quot;
+  exit 0
+fi
+ROUTES=$(yq '.routes[]' .github/smoke.yml)
+BASE_URL=&quot;${PREVIEW_URL:-}&quot;
+if [ -z &quot;$BASE_URL&quot; ]; then
+  echo &quot;::error::PREVIEW_URL not set; cannot smoke test.&quot;
+  exit 1
+fi
+for ROUTE in $ROUTES; do
+  URL=&quot;${BASE_URL}${ROUTE}&quot;
+  echo &quot;==&gt; GET $URL&quot;
+  HTTP=$(curl -sS -o /dev/null -w &quot;%{http_code}&quot; &quot;$URL&quot;)
+  if [ &quot;$HTTP&quot; -ge 400 ]; then
+    echo &quot;::error::$URL returned $HTTP&quot;
+    exit 1
+  fi
+  echo &quot;    OK ($HTTP)&quot;
+done
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 11: Make all scripts executable</strong></li>
+</ul>
+<pre><code class="language-bash">chmod +x .github/scripts/*.sh
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 12: Smoke-test each script&rsquo;s syntax</strong></li>
+</ul>
+<pre><code class="language-bash">for s in .github/scripts/*.sh; do
+  bash -n &quot;$s&quot; &amp;&amp; echo &quot;OK: $s&quot;
+done
+</code></pre>
+<p>Expected: all 10 print <code>OK:</code>.</p>
+<ul>
+<li>[ ] <strong>Step 13: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add .github/scripts/
+git commit -m &quot;feat(layer2): add stack-specific CI/CD entry scripts&quot;
+</code></pre>
+<h3 id="task-33-add-8-language-profile-workflows">Task 3.3: Add 8 language-profile workflows<a class="anchor" href="#task-33-add-8-language-profile-workflows" title="Permalink to this section">#</a></h3>
+<p><strong>Files:</strong>
+- Create: <code>.github/workflows/ci-node.yml</code>
+- Create: <code>.github/workflows/ci-python.yml</code>
+- Create: <code>.github/workflows/ci-go.yml</code>
+- Create: <code>.github/workflows/ci-shell.yml</code>
+- Create: <code>.github/workflows/ci-docker.yml</code>
+- Create: <code>.github/workflows/ci-sql.yml</code>
+- Create: <code>.github/workflows/ci-e2e.yml</code>
+- Create: <code>.github/workflows/ci-docs.yml</code></p>
+<p>Each workflow checks for the marker file and exits cleanly if absent. Otherwise calls the matching script.</p>
+<ul>
+<li>[ ] <strong>Step 1: Create <code>ci-node.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: ci-node
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      applies: ${{ steps.check.outputs.applies }}
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - id: check
+        run: |
+          if [ -f .github/stacks.yml ]; then
+            if yq '.stacks[] | select(.kind == &quot;node&quot;)' .github/stacks.yml &gt; /dev/null; then
+              echo &quot;applies=true&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+            else
+              echo &quot;applies=false&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+            fi
+          elif [ -f package.json ]; then
+            echo &quot;applies=true&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+          else
+            echo &quot;applies=false&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+          fi
+  ci:
+    needs: detect
+    if: needs.detect.outputs.applies == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: block
+          allowed-endpoints: &gt;
+            registry.npmjs.org:443
+            registry.yarnpkg.com:443
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.0.3
+        with:
+          node-version-file: &quot;.nvmrc&quot;
+          cache: npm
+      - name: Run ci-node.sh
+        run: bash .github/scripts/ci-node.sh
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Create <code>ci-python.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: ci-python
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      applies: ${{ steps.check.outputs.applies }}
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - id: check
+        run: |
+          if [ -f .github/stacks.yml ]; then
+            if yq '.stacks[] | select(.kind == &quot;python&quot;)' .github/stacks.yml &gt; /dev/null; then
+              echo &quot;applies=true&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+            else
+              echo &quot;applies=false&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+            fi
+          elif [ -f pyproject.toml ] || ls requirements*.txt 2&gt;/dev/null | grep -q .; then
+            echo &quot;applies=true&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+          else
+            echo &quot;applies=false&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+          fi
+  ci:
+    needs: detect
+    if: needs.detect.outputs.applies == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: block
+          allowed-endpoints: &gt;
+            pypi.org:443
+            files.pythonhosted.org:443
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
+        with:
+          python-version-file: &quot;.python-version&quot;
+          cache: pip
+      - name: Run ci-python.sh
+        run: bash .github/scripts/ci-python.sh
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Create <code>ci-go.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: ci-go
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      applies: ${{ steps.check.outputs.applies }}
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - id: check
+        run: |
+          if [ -f .github/stacks.yml ] &amp;&amp; yq '.stacks[] | select(.kind == &quot;go&quot;)' .github/stacks.yml &gt; /dev/null; then
+            echo &quot;applies=true&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+          elif [ -f go.mod ]; then
+            echo &quot;applies=true&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+          else
+            echo &quot;applies=false&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+          fi
+  ci:
+    needs: detect
+    if: needs.detect.outputs.applies == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: block
+          allowed-endpoints: &gt;
+            proxy.golang.org:443
+            sum.golang.org:443
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            storage.googleapis.com:443
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+        with:
+          go-version-file: &quot;.go-version&quot;
+          cache: true
+      - name: Run ci-go.sh
+        run: bash .github/scripts/ci-go.sh
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Create <code>ci-shell.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: ci-shell
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      applies: ${{ steps.check.outputs.applies }}
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - id: check
+        run: |
+          # Per spec §4.4: shell triggers only when shell is the PRIMARY language
+          # OR when stacks.yml explicitly opts in.
+          if [ -f .github/stacks.yml ] &amp;&amp; yq '.stacks[] | select(.kind == &quot;shell&quot;)' .github/stacks.yml &gt; /dev/null; then
+            echo &quot;applies=true&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+          elif [ ! -f package.json ] &amp;&amp; [ ! -f pyproject.toml ] &amp;&amp; [ ! -f go.mod ] \
+               &amp;&amp; [ ! -f Cargo.toml ] &amp;&amp; find . -name &quot;*.sh&quot; -not -path &quot;./.git/*&quot; | head -1 | grep -q .; then
+            # No other language detected, but shell scripts present → primary language is shell.
+            echo &quot;applies=true&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+          else
+            echo &quot;applies=false&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+          fi
+  ci:
+    needs: detect
+    if: needs.detect.outputs.applies == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: block
+          allowed-endpoints: &gt;
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Install shfmt
+        run: go install mvdan.cc/sh/v3/cmd/shfmt@latest
+      - name: Run ci-shell.sh
+        run: bash .github/scripts/ci-shell.sh
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: Create <code>ci-docker.yml</code>, <code>ci-sql.yml</code>, <code>ci-e2e.yml</code>, <code>ci-docs.yml</code></strong></li>
+</ul>
+<p>Each follows the same <code>detect → ci</code> pattern with stack-appropriate triggers and allowed-endpoints. To avoid bloating the plan, the full content of each is documented inline in the workflow files themselves; use the patterns from Steps 1-4 as a template:</p>
+<ul>
+<li><code>ci-docker.yml</code>: detect via <code>Dockerfile</code> or <code>compose.yml</code>; allowed-endpoints includes <code>*.docker.io</code> and <code>ghcr.io</code>.</li>
+<li><code>ci-sql.yml</code>: detect via <code>migrations/</code> or <code>*.sql</code> files; runs Postgres 16 service container; calls <code>ci-sql.sh</code>.</li>
+<li><code>ci-e2e.yml</code>: detect via <code>playwright.config.*</code> or <code>cypress.config.*</code>; allowed-endpoints includes <code>playwright.azureedge.net</code> for browser downloads.</li>
+<li><code>ci-docs.yml</code>: detect via <code>mkdocs.yml</code> / <code>docusaurus.config.*</code> / root <code>docs/</code> dir.</li>
+</ul>
+<p>When implementing each, copy the structural pattern from <code>ci-node.yml</code> and substitute the appropriate detect logic, allowed-endpoints, and <code>bash .github/scripts/ci-&lt;stack&gt;.sh</code> invocation.</p>
+<ul>
+<li>[ ] <strong>Step 6: Run actionlint and commit all 8</strong></li>
+</ul>
+<pre><code class="language-bash">./actionlint -color .github/workflows/ci-*.yml
+git add .github/workflows/ci-*.yml
+git commit -m &quot;feat(layer2): add 8 language profile workflows with auto-detection&quot;
+</code></pre>
+<h3 id="task-34-add-cd-workflows-release-pipeline">Task 3.4: Add CD workflows + release pipeline<a class="anchor" href="#task-34-add-cd-workflows-release-pipeline" title="Permalink to this section">#</a></h3>
+<p><strong>Files:</strong>
+- Create: <code>.github/workflows/cd-deploy.yml</code>
+- Create: <code>.github/workflows/cd-smoke.yml</code>
+- Create: <code>.github/workflows/release.yml</code>
+- Create: <code>.github/workflows/sbom-on-release.yml</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Create <code>cd-deploy.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: cd-deploy
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  deployments: write
+concurrency:
+  group: cd-deploy
+  cancel-in-progress: false
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      applies: ${{ steps.check.outputs.applies }}
+      target: ${{ steps.check.outputs.target }}
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - id: check
+        run: |
+          if [ -f vercel.json ]; then
+            echo &quot;applies=true&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+            echo &quot;target=vercel&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+          elif [ -f fly.toml ]; then
+            echo &quot;applies=true&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+            echo &quot;target=fly&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+          elif [ -f railway.toml ]; then
+            echo &quot;applies=true&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+            echo &quot;target=railway&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+          else
+            echo &quot;applies=false&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+          fi
+  deploy:
+    needs: detect
+    if: needs.detect.outputs.applies == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      preview-url: ${{ steps.deploy.outputs.preview-url }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          URL=$(bash .github/scripts/cd-deploy.sh)
+          echo &quot;preview-url=$URL&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Add a <code>smoke</code> job to <code>cd-deploy.yml</code> (replaces standalone <code>cd-smoke.yml</code>)</strong></li>
+</ul>
+<p>The original v0.3 plan had <code>cd-smoke.yml</code> as a separate workflow
+  triggered by <code>workflow_run</code>. <strong>That doesn&rsquo;t actually work</strong>:
+  GitHub&rsquo;s <code>workflow_run</code> event payload does NOT include arbitrary
+  job outputs from the upstream workflow — <code>${{ github.event.workflow_run.outputs.preview-url }}</code> is
+  always empty.</p>
+<p>Fix: merge smoke into <code>cd-deploy.yml</code> as a second job that depends
+  on <code>deploy</code> via <code>needs:</code>. Job outputs DO pass between jobs in the
+  same workflow.</p>
+<p>Append this job to <code>cd-deploy.yml</code> (after the <code>deploy</code> job):</p>
+<pre><code class="language-yaml">  smoke:
+    needs: deploy
+    if: needs.deploy.outputs.preview-url != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Run cd-smoke.sh
+        env:
+          PREVIEW_URL: ${{ needs.deploy.outputs.preview-url }}
+        run: bash .github/scripts/cd-smoke.sh
+</code></pre>
+<p><strong>Do NOT create a separate <code>cd-smoke.yml</code>.</strong> The single-workflow
+  pattern is the correct shape; the v0.3 plan&rsquo;s two-workflow pattern
+  was a known broken design.</p>
+<ul>
+<li>[ ] <strong>Step 3: Create <code>release.yml</code> using slsa-github-generator</strong></li>
+</ul>
+<pre><code class="language-yaml">name: release
+on:
+  push:
+    tags: [&quot;v*&quot;]
+permissions:
+  contents: write
+  id-token: write
+  actions: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.hash.outputs.digest }}
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Build
+        run: |
+          mkdir -p dist
+          # Stack-specific build invoked here; for the template itself,
+          # this is a no-op tarball of docs/.
+          tar -czf &quot;dist/release-${GITHUB_REF#refs/tags/}.tar.gz&quot; docs/
+      - id: hash
+        run: |
+          # slsa-github-generator's `base64-subjects` expects a
+          # base64-encoded list of `&lt;sha256&gt;  &lt;filename&gt;` lines —
+          # i.e., the literal output of `sha256sum`, base64-encoded
+          # with no line wrapping. Single-file case only here; if
+          # this template ever ships multiple release artifacts,
+          # update the build to produce them all in dist/ first
+          # (sha256sum * already handles multiple files correctly,
+          # but the workflow's intent must be a single subjects blob).
+          cd dist
+          shopt -s nullglob
+          FILES=( *.tar.gz )
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo &quot;::error::No artifacts in dist/ to attest.&quot;
+            exit 1
+          fi
+          DIGEST=$(sha256sum &quot;${FILES[@]}&quot; | base64 -w0)
+          echo &quot;digest=$DIGEST&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+          echo &quot;Subjects (pre-base64):&quot;
+          sha256sum &quot;${FILES[@]}&quot;
+      - uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
+        with:
+          name: release-artifacts
+          path: dist/
+          retention-days: 365
+  provenance:
+    needs: build
+    # Per spec §4.6 tag-pinning exception: SLSA generator MUST be tag-pinned.
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    with:
+      base64-subjects: ${{ needs.build.outputs.digest }}
+      provenance-name: release.intoto.jsonl
+      upload-assets: true
+  release:
+    needs: [build, provenance]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: release-artifacts
+          path: dist/
+      - uses: softprops/action-gh-release@01570a1f39cb168c169c69a18e1c2398200e0fe1 # v2.0.6
+        with:
+          files: dist/*
+          generate_release_notes: true
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Create <code>sbom-on-release.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">name: sbom-on-release
+on:
+  release:
+    types: [published]
+permissions:
+  contents: write
+  id-token: write
+jobs:
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - uses: anchore/sbom-action@61119d458adab75f756bc0b9e4bde25725f86a7a # v0.17.2
+        with:
+          artifact-name: sbom.cdx.json
+          format: cyclonedx-json
+          upload-release-assets: true
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: Run actionlint and commit</strong></li>
+</ul>
+<pre><code class="language-bash">./actionlint -color .github/workflows/cd-*.yml .github/workflows/release.yml .github/workflows/sbom-on-release.yml
+git add .github/workflows/{cd-deploy,cd-smoke,release,sbom-on-release}.yml
+git commit -m &quot;feat(layer2): add CD pipeline + slsa-github-generator releases&quot;
+</code></pre>
+<h3 id="task-35-add-bootstrap-script-skeleton-files">Task 3.5: Add bootstrap script + skeleton files<a class="anchor" href="#task-35-add-bootstrap-script-skeleton-files" title="Permalink to this section">#</a></h3>
+<p><strong>Files:</strong>
+- Replace: <code>scripts/bootstrap.sh</code> (drop branch-protection logic)
+- Create: <code>.github/stacks.yml.example</code>
+- Create: <code>.github/smoke.yml.example</code>
+- Create: <code>LICENSE-OVERRIDE.md</code> (empty stub)
+- Create: <code>.editorconfig</code>
+- Create: <code>.gitattributes</code>
+- Create: <code>.nvmrc</code>
+- Create: <code>.python-version</code>
+- Create: <code>.go-version</code>
+- Create: <code>.tool-versions</code>
+- Create: <code>Makefile</code> (developer-only)
+- Create: <code>lefthook.yml</code>
+- Create: <code>commitlint.config.js</code>
+- Create: <code>release-please-config.json</code>
+- Create: <code>release-please-manifest.json</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Create <code>scripts/bootstrap.sh</code></strong></li>
+</ul>
+<pre><code class="language-bash">#!/usr/bin/env bash
+# Run once after `gh repo create --template`. Stack scaffolding only;
+# branch protection is the App's responsibility per spec §4.7.
+set -euo pipefail
+
+echo &quot;==&gt; Project name (default: current dir):&quot;
+read -r PROJECT_NAME
+PROJECT_NAME=${PROJECT_NAME:-$(basename &quot;$PWD&quot;)}
+
+echo &quot;==&gt; Primary language? [node|python|go|shell|other]:&quot;
+read -r LANG
+
+echo &quot;==&gt; License? [MIT|Apache-2.0|BSD-3-Clause]:&quot;
+read -r LICENSE
+LICENSE=${LICENSE:-MIT}
+
+# Initialize toolchain.
+case &quot;$LANG&quot; in
+  node)   npm init -y &gt; /dev/null ;;
+  python) test -f pyproject.toml || python -m venv .venv &amp;&amp; pip install uv &amp;&amp; uv init . ;;
+  go)     test -f go.mod || go mod init &quot;github.com/nischal94/$PROJECT_NAME&quot; ;;
+  shell)  echo &quot;Shell project; no toolchain init.&quot; ;;
+  *)      echo &quot;Unknown lang; skipping toolchain init.&quot; ;;
+esac
+
+# Remove unused profile workflows for a cleaner Actions tab.
+KEEP=&quot;$LANG&quot;
+for w in .github/workflows/ci-*.yml; do
+  base=$(basename &quot;$w&quot; .yml)
+  stack=${base#ci-}
+  case &quot;$stack&quot; in
+    &quot;$KEEP&quot;|docker|sql|e2e|docs|shell) : ;; # keep cross-cutting + chosen
+    *) rm -f &quot;$w&quot; ;;
+  esac
+done
+
+# Wire Makefile to language-specific commands.
+cat &gt; Makefile &lt;&lt;EOF
+.PHONY: install lint test build ci
+
+install:
+EOF
+case &quot;$LANG&quot; in
+  node)   echo &quot;    npm install&quot; &gt;&gt; Makefile ;;
+  python) echo &quot;    pip install -e .[dev,test]&quot; &gt;&gt; Makefile ;;
+  go)     echo &quot;    go mod download&quot; &gt;&gt; Makefile ;;
+  *)      echo &quot;    @echo 'No install command configured.'&quot; &gt;&gt; Makefile ;;
+esac
+# ... (lint, test, build, ci targets follow same pattern)
+
+echo &quot;==&gt; Bootstrap complete. Initial commit:&quot;
+git add .
+git commit -m &quot;chore: initial bootstrap from nischal94/repo-template&quot;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Create the example config files</strong></li>
+</ul>
+<p><code>.github/stacks.yml.example</code>:</p>
+<pre><code class="language-yaml"># Optional manifest for monorepos. Rename to stacks.yml to activate.
+# When present, stacks.yml overrides auto-detection (spec §4.3).
+stacks:
+  - kind: node
+    path: services/web
+  - kind: python
+    path: services/api
+ignore:
+  - third_party/
+  - examples/
+</code></pre>
+<p><code>.github/smoke.yml.example</code>:</p>
+<pre><code class="language-yaml"># Routes hit by cd-smoke.yml after a successful deploy. Rename to smoke.yml.
+routes:
+  - /
+  - /api/healthz
+  - /login
+</code></pre>
+<p><code>LICENSE-OVERRIDE.md</code>:</p>
+<pre><code class="language-markdown"># License Overrides
+
+Add entries here when github/licensed flags an unfamiliar dep license.
+Format: `- \`&lt;package&gt;@&lt;version&gt;\`: &lt;SPDX-id&gt; — &lt;reason&gt;`
+
+Example:
+- `some-package@1.2.3`: MPL-2.0 — weak copyleft, file-level only
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Create the standard config files</strong></li>
+</ul>
+<p><code>.editorconfig</code>:</p>
+<pre><code>root = true
+
+[*]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.{py,go}]
+indent_size = 4
+
+[Makefile]
+indent_style = tab
+</code></pre>
+<p><code>.gitattributes</code>:</p>
+<pre><code>* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.pdf binary
+</code></pre>
+<p><code>.nvmrc</code>:</p>
+<pre><code>20
+</code></pre>
+<p><code>.python-version</code>:</p>
+<pre><code>3.12
+</code></pre>
+<p><code>.go-version</code>:</p>
+<pre><code>1.22
+</code></pre>
+<p><code>.tool-versions</code>:</p>
+<pre><code>nodejs 20
+python 3.12
+golang 1.22
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Create <code>lefthook.yml</code></strong></li>
+</ul>
+<pre><code class="language-yaml">pre-commit:
+  parallel: true
+  commands:
+    lint:
+      glob: &quot;*.{js,ts,jsx,tsx,py,go,sh}&quot;
+      run: make lint || true
+    typecheck:
+      glob: &quot;*.{ts,tsx,py}&quot;
+      run: make typecheck || true
+
+pre-push:
+  commands:
+    test:
+      run: make test
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: Create <code>commitlint.config.js</code></strong></li>
+</ul>
+<pre><code class="language-javascript">module.exports = {
+  extends: [&quot;@commitlint/config-conventional&quot;],
+  rules: {
+    &quot;type-enum&quot;: [2, &quot;always&quot;, [
+      &quot;feat&quot;, &quot;fix&quot;, &quot;docs&quot;, &quot;refactor&quot;, &quot;test&quot;, &quot;chore&quot;,
+      &quot;build&quot;, &quot;ci&quot;, &quot;perf&quot;, &quot;style&quot;
+    ]],
+  },
+};
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 6: Create release-please configs</strong></li>
+</ul>
+<p><code>release-please-config.json</code>:</p>
+<pre><code class="language-json">{
+  &quot;release-type&quot;: &quot;simple&quot;,
+  &quot;include-component-in-tag&quot;: false,
+  &quot;bump-minor-pre-major&quot;: true,
+  &quot;bump-patch-for-minor-pre-major&quot;: true
+}
+</code></pre>
+<p><code>release-please-manifest.json</code>:</p>
+<pre><code class="language-json">{
+  &quot;.&quot;: &quot;0.1.0&quot;
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 7: Make bootstrap executable, commit</strong></li>
+</ul>
+<pre><code class="language-bash">chmod +x scripts/bootstrap.sh
+git add scripts/bootstrap.sh \
+        .github/stacks.yml.example .github/smoke.yml.example \
+        LICENSE-OVERRIDE.md \
+        .editorconfig .gitattributes .nvmrc .python-version .go-version .tool-versions \
+        Makefile lefthook.yml commitlint.config.js \
+        release-please-config.json release-please-manifest.json
+git commit -m &quot;feat(layer2): add bootstrap + skeleton config files&quot;
+</code></pre>
+<h3 id="task-36-add-architecture-runbook-threat_model-templates">Task 3.6: Add ARCHITECTURE / RUNBOOK / THREAT_MODEL templates<a class="anchor" href="#task-36-add-architecture-runbook-threat_model-templates" title="Permalink to this section">#</a></h3>
+<p><strong>Files:</strong>
+- Create: <code>docs/ARCHITECTURE.md</code>
+- Create: <code>docs/RUNBOOK.md</code>
+- Create: <code>docs/THREAT_MODEL.md</code></p>
+<p>These are <em>template stubs</em> — every project derived from this template starts with these three docs and fills them in.</p>
+<ul>
+<li>[ ] <strong>Step 1: Create <code>docs/ARCHITECTURE.md</code></strong></li>
+</ul>
+<pre><code class="language-markdown"># Architecture
+
+&gt; Replace this stub with your project's actual architecture overview.
+
+## Components
+- &lt;component 1&gt;: &lt;responsibility&gt;
+- &lt;component 2&gt;: &lt;responsibility&gt;
+
+## Data flow
+&lt;describe how data moves between components&gt;
+
+## Trust boundaries
+&lt;which components trust each other, and which don't&gt;
+
+## Tradeoffs
+&lt;list 2-3 architectural choices and what alternatives were rejected&gt;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Create <code>docs/RUNBOOK.md</code></strong></li>
+</ul>
+<pre><code class="language-markdown"># Runbook
+
+&gt; Replace with project-specific operational procedures.
+
+## Deployment
+&lt;how to deploy, who has access, what to do if it fails&gt;
+
+## Monitoring
+&lt;where to look when something's wrong&gt;
+
+## Common incidents
+### Symptom: &lt;X&gt;
+**Diagnosis**: &lt;Y&gt;
+**Mitigation**: &lt;Z&gt;
+
+## Escalation
+&lt;who to contact when self-mitigation fails&gt;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Create <code>docs/THREAT_MODEL.md</code></strong></li>
+</ul>
+<pre><code class="language-markdown"># Threat Model
+
+&gt; Replace with project-specific threat analysis. Template inherits
+&gt; the universal nischal94 baseline (see policies/required-checks.yml
+&gt; in nischal94/.github).
+
+## Assets
+&lt;what we're protecting&gt;
+
+## Adversaries
+&lt;who would want to attack this and why&gt;
+
+## Trust roots
+&lt;what credentials, when compromised, give an attacker the most leverage&gt;
+
+## Documented gaps (per spec §4.6 if applicable)
+&lt;e.g., long-lived deploy tokens for Vercel/Fly until provider OIDC ships&gt;
+
+## Mitigations
+&lt;enumeration of defense-in-depth&gt;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add docs/ARCHITECTURE.md docs/RUNBOOK.md docs/THREAT_MODEL.md
+git commit -m &quot;feat(layer2): add ARCHITECTURE/RUNBOOK/THREAT_MODEL stubs&quot;
+</code></pre>
+<h3 id="task-37-push-branch-and-open-pr">Task 3.7: Push branch and open PR<a class="anchor" href="#task-37-push-branch-and-open-pr" title="Permalink to this section">#</a></h3>
+<ul>
+<li>[ ] <strong>Step 1: Push the feature branch</strong></li>
+</ul>
+<pre><code class="language-bash">git push -u origin feat/layer-2-refactor
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Open the PR</strong></li>
+</ul>
+<pre><code class="language-bash">gh pr create --base main \
+  --title &quot;feat: refactor to enterprise CI Layer 2 scaffold (v0.3 spec)&quot; \
+  --body &quot;Implements §4 of the v0.3 spec. Adds 8 language profile workflows with auto-detection, OIDC-or-token CD, slsa-github-generator releases, license-check, and bootstrap script. Layer 1 enforcement comes from nischal94/.github (see Phase 1-2 of the implementation plan).&quot;
+</code></pre>
+<h3 id="phase-3-exit-gate">Phase 3 exit gate<a class="anchor" href="#phase-3-exit-gate" title="Permalink to this section">#</a></h3>
+<p>Before proceeding to Phase 4, confirm:</p>
+<ul>
+<li>[ ] <code>feat/layer-2-refactor</code> branch contains all 12 new workflows.</li>
+<li>[ ] All workflows pass <code>actionlint -color</code>.</li>
+<li>[ ] All scripts in <code>.github/scripts/</code> pass <code>bash -n</code>.</li>
+<li>[ ] PR opened against <code>main</code> of <code>nischal94/repo-template</code>.</li>
+<li>[ ] Phase 1&rsquo;s universal workflows (synced via scaffold-on-poll) ran successfully on this PR — gitleaks, dependency-review, etc., all green.</li>
+</ul>
+<hr>
+<h2 id="phase-4-full-lifecycle-smoke-test-user-claude">Phase 4 — Full lifecycle smoke test [USER] + [CLAUDE]<a class="anchor" href="#phase-4-full-lifecycle-smoke-test-user-claude" title="Permalink to this section">#</a></h2>
+<h3 id="task-41-merge-the-layer-2-pr-user">Task 4.1: Merge the Layer 2 PR [USER]<a class="anchor" href="#task-41-merge-the-layer-2-pr-user" title="Permalink to this section">#</a></h3>
+<ul>
+<li>[ ] <strong>Step 1: Review and merge</strong></li>
+</ul>
+<pre><code class="language-bash">gh pr merge --repo nischal94/repo-template --squash &lt;PR-number-from-3.7&gt;
+</code></pre>
+<h3 id="task-42-create-a-fresh-test-repo-from-the-template-user">Task 4.2: Create a fresh test repo from the template [USER]<a class="anchor" href="#task-42-create-a-fresh-test-repo-from-the-template-user" title="Permalink to this section">#</a></h3>
+<ul>
+<li>[ ] <strong>Step 1: Use the template</strong></li>
+</ul>
+<pre><code class="language-bash">gh repo create nischal94/test-fullstack-1 \
+  --template nischal94/repo-template \
+  --public \
+  --description &quot;Full-lifecycle smoke test.&quot;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Clone it</strong></li>
+</ul>
+<pre><code class="language-bash">git clone git@github.com:nischal94/test-fullstack-1.git
+cd test-fullstack-1
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Run bootstrap</strong></li>
+</ul>
+<pre><code class="language-bash">bash scripts/bootstrap.sh
+# Answers: project name = test-fullstack-1, lang = node, license = MIT.
+</code></pre>
+<h3 id="task-43-verify-the-full-lifecycle-claude">Task 4.3: Verify the full lifecycle [CLAUDE]<a class="anchor" href="#task-43-verify-the-full-lifecycle-claude" title="Permalink to this section">#</a></h3>
+<ul>
+<li>[ ] <strong>Step 1: Wait up to 10 minutes for the App&rsquo;s first poll</strong></li>
+</ul>
+<pre><code class="language-bash">sleep 600
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Verify ruleset applied</strong></li>
+</ul>
+<pre><code class="language-bash">gh api repos/nischal94/test-fullstack-1/rulesets --jq '.[].name'
+</code></pre>
+<p>Expected: <code>"nischal94 canonical main protection"</code>.</p>
+<ul>
+<li>[ ] <strong>Step 3: Verify scaffold PR opened</strong></li>
+</ul>
+<pre><code class="language-bash">gh pr list --repo nischal94/test-fullstack-1
+</code></pre>
+<p>Expected: PR titled <code>"chore: scaffold Layer 1 universal workflows"</code>.</p>
+<ul>
+<li>[ ] <strong>Step 4: Verify each workflow ran successfully</strong></li>
+</ul>
+<pre><code class="language-bash">gh run list --repo nischal94/test-fullstack-1 --limit 20
+</code></pre>
+<p>Expected: gitleaks, dependency-review, osv-scanner, actionlint, pin-actions, pr-title, license-check all completed (green or expected fail like license-check on a bare scaffold).</p>
+<ul>
+<li>[ ] <strong>Step 5: Open a test PR and verify the gate works</strong></li>
+</ul>
+<pre><code class="language-bash">cd test-fullstack-1
+git checkout -b test/verify-blocks
+echo &quot;test&quot; &gt;&gt; README.md
+git commit -am &quot;test: trigger ci&quot;
+git push -u origin test/verify-blocks
+gh pr create --title &quot;BAD TITLE NO COLON&quot; --body &quot;should be blocked by pr-title&quot;
+</code></pre>
+<p>Expected: <code>Validate PR title</code> check fails. PR cannot be merged until title is fixed.</p>
+<p>Fix the title:</p>
+<pre><code class="language-bash">gh pr edit --title &quot;test: verify blocks work&quot;
+</code></pre>
+<p>Expected: now passes. Merge possible (after other required checks pass).</p>
+<h3 id="task-44-cleanup-user">Task 4.4: Cleanup [USER]<a class="anchor" href="#task-44-cleanup-user" title="Permalink to this section">#</a></h3>
+<ul>
+<li>[ ] <strong>Step 1: Delete the test repo</strong></li>
+</ul>
+<pre><code class="language-bash">gh repo delete nischal94/test-fullstack-1 --yes
+</code></pre>
+<h3 id="phase-4-exit-gate">Phase 4 exit gate<a class="anchor" href="#phase-4-exit-gate" title="Permalink to this section">#</a></h3>
+<ul>
+<li>[ ] Fresh template-derived repo received canonical ruleset.</li>
+<li>[ ] Scaffold PR auto-opened with all Layer 1 workflows.</li>
+<li>[ ] All Layer 1 + Layer 2 workflows ran on first PR.</li>
+<li>[ ] PR-title gate demonstrably blocks bad titles.</li>
+<li>[ ] Test repo cleaned up.</li>
+</ul>
+<hr>
+<h2 id="phase-5-documentation-claude">Phase 5 — Documentation [CLAUDE]<a class="anchor" href="#phase-5-documentation-claude" title="Permalink to this section">#</a></h2>
+<h3 id="task-51-update-nischal94github-readme">Task 5.1: Update <code>nischal94/.github</code> README<a class="anchor" href="#task-51-update-nischal94github-readme" title="Permalink to this section">#</a></h3>
+<p><strong>Files:</strong>
+- Modify: <code>~/projects/nischal94-dot-github/README.md</code>
+- Create: <code>~/projects/nischal94-dot-github/docs/POLICIES.md</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Replace the placeholder README</strong></li>
+</ul>
+<pre><code class="language-markdown"># nischal94/.github
+
+Account-level CI policy + community files for every repo on
+github.com/nischal94. Auto-supplied to every repo on this account.
+
+## What lives here
+
+- **Universal workflows** (`.github/workflows/*.yml`) — synced into
+  every repo by `scaffold-on-poll.yml`.
+- **Policies** (`policies/*.{json,yml}`) — canonical ruleset and
+  license allowlist applied by `enforce-on-poll.yml`.
+- **Community files** (`SECURITY.md`, `CODE_OF_CONDUCT.md`,
+  `CODEOWNERS`, `.github/PULL_REQUEST_TEMPLATE.md`,
+  `.github/ISSUE_TEMPLATE/`, `.github/dependabot.yml`,
+  `.github/FUNDING.yml`) — auto-supplied to every repo via GitHub's
+  `.github`-repo magic-name convention.
+- **State** (`state/configured-repos.json`) — cache of which repos
+  have had the canonical ruleset applied. Authoritative source is
+  `GET /installation/repositories`, not this file.
+
+## Operations
+
+- **Add new policy → all repos**: edit `policies/canonical-ruleset.json`,
+  open PR, merge. Drift audit picks up the change weekly; or trigger
+  `force-sync.yml` manually for immediate propagation.
+- **App is uninstalled**: `app-canary.yml` opens a critical issue here
+  daily. Re-install from
+  https://github.com/settings/apps/nischal94-policy/installations.
+- **State file corrupted**: trigger `force-sync.yml` with `target=all`;
+  rebuilds state from scratch via `GET /installation/repositories`.
+
+## Reference
+
+Full design: [`nischal94/repo-template` v0.3 spec](https://github.com/nischal94/repo-template/blob/main/docs/specs/2026-05-09-enterprise-ci-template-design.md).
+Implementation: [the plan that built this](https://github.com/nischal94/repo-template/blob/main/docs/specs/2026-05-09-enterprise-ci-template-plan.md).
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Create <code>docs/POLICIES.md</code></strong></li>
+</ul>
+<pre><code class="language-markdown"># Policies enforced on every repo
+
+Source of truth: `policies/canonical-ruleset.json` and
+`policies/required-checks.yml`. This doc is the human-readable summary.
+
+## Required checks (block merge)
+See `policies/required-checks.yml`. Currently 7 mandatory checks:
+gitleaks, dependency-review, osv-scanner, actionlint, pin-actions,
+Validate PR title, license-check.
+
+## Branch protection rules
+See `policies/canonical-ruleset.json`. Currently enforces signed
+commits, no deletion, no force-push, 1 approving review on PRs,
+code-owner review required.
+
+## Bypass actors
+Only `nischal94-policy` itself can bypass these rules, and only for
+scaffold PRs (which apply policy by definition).
+
+## License allowlist
+See `policies/license-config.yml`. Default: 9 licenses
+(MIT, Apache-2.0, BSD family, ISC, MPL-2.0, CC0).
+Per-repo overrides go in each repo's `LICENSE-OVERRIDE.md`.
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Commit and push</strong></li>
+</ul>
+<pre><code class="language-bash">cd ~/projects/nischal94-dot-github
+git add README.md docs/POLICIES.md
+git commit -m &quot;docs: production-ready README + policies overview&quot;
+git push origin main
+</code></pre>
+<h3 id="task-52-update-nischal94repo-template-readme">Task 5.2: Update <code>nischal94/repo-template</code> README<a class="anchor" href="#task-52-update-nischal94repo-template-readme" title="Permalink to this section">#</a></h3>
+<p><strong>Files:</strong>
+- Modify: <code>~/projects/repo-template/README.md</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Rewrite README to describe what the template gives you</strong></li>
+</ul>
+<pre><code class="language-markdown"># nischal94/repo-template
+
+Template repository: every new project on github.com/nischal94 starts
+here. Provides Layer 2 of the [enterprise CI template system](docs/specs/2026-05-09-enterprise-ci-template-design.md).
+
+## What you get on day 0
+
+Click &quot;Use this template&quot; → bootstrap script asks for project name,
+language, license → creates a new repo with:
+
+- **8 language profile workflows** (auto-detect via marker files;
+  only the relevant ones run): Node, Python, Go, Shell, Docker, SQL,
+  E2E, Docs.
+- **CD pipeline** (`cd-deploy.yml` + `cd-smoke.yml`) with
+  OIDC where supported (AWS / GCP / Azure / Cloudflare); long-lived
+  project-scoped tokens for Vercel / Fly / Railway / Render
+  (documented as gap in `docs/THREAT_MODEL.md`).
+- **Release pipeline** with [`slsa-github-generator`](https://github.com/slsa-framework/slsa-github-generator)
+  SLSA Build L3 provenance + CycloneDX SBOM.
+- **License compliance** via [`github/licensed`](https://github.com/github/licensed)
+  with per-repo `LICENSE-OVERRIDE.md` audit trail.
+- **Skeleton docs**: `ARCHITECTURE.md`, `RUNBOOK.md`, `THREAT_MODEL.md`.
+- **Pre-commit/pre-push hooks** via `lefthook.yml`.
+- **Conventional Commits** enforcement via `commitlint`.
+- **Semver releases** via `release-please`.
+
+## What you get from Layer 1 ([nischal94/.github](https://github.com/nischal94/.github))
+
+Within ~5-30 min of repo creation (the App polls every 5 min):
+
+- Canonical branch protection ruleset on `main`.
+- 9 universal workflow files synced into `.github/workflows/`:
+  gitleaks, dependency-review, osv-scanner, actionlint, pin-actions,
+  pr-title, codeql, license-check, scorecard.
+- Drift audit watching for divergence from the canonical policy.
+
+## Quick start
+
+```bash
+  gh repo create my-new-project \
+    --template nischal94/repo-template \
+    --public \
+    --clone
+  cd my-new-project
+  bash scripts/bootstrap.sh
+</code></pre>
+<h2 id="reference">Reference<a class="anchor" href="#reference" title="Permalink to this section">#</a></h2>
+<ul>
+<li><a href="docs/specs/2026-05-09-enterprise-ci-template-design.md">Design spec</a> (v0.3)</li>
+<li><a href="docs/specs/2026-05-09-enterprise-ci-template-plan.md">Implementation plan</a></li>
+</ul>
+<pre><code>
+- [ ] **Step 2: Commit on main (after Phase 4 merged this branch)**
+
+```bash
+cd ~/projects/repo-template
+git checkout main
+git pull
+git checkout -b docs/update-readme
+# apply the README changes
+git add README.md
+git commit -m &quot;docs: rewrite README for v0.3 template&quot;
+git push -u origin docs/update-readme
+gh pr create --title &quot;docs: rewrite README for v0.3 template&quot; --body &quot;Reflects what the template actually provides post-refactor.&quot;
+</code></pre>
+<h3 id="task-53-add-operational-runbook-for-the-app-itself">Task 5.3: Add operational runbook for the App itself<a class="anchor" href="#task-53-add-operational-runbook-for-the-app-itself" title="Permalink to this section">#</a></h3>
+<p><strong>Files:</strong>
+- Create: <code>~/projects/nischal94-dot-github/docs/APP-RUNBOOK.md</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Create the App-specific runbook</strong></li>
+</ul>
+<pre><code class="language-markdown"># nischal94-policy App Runbook
+
+## App identity
+- **Name**: nischal94-policy
+- **App ID**: see https://github.com/settings/apps/nischal94-policy (top of page)
+- **Settings**: https://github.com/settings/apps/nischal94-policy
+- **Installations**: https://github.com/settings/apps/nischal94-policy/installations
+
+## Credentials trust chain
+1. 2FA on the `nischal94` GitHub login: passkeys (preferred), with
+   Google Authenticator TOTP, GitHub Mobile, and security keys as
+   fallbacks; recovery codes generated and stored offline.
+2. Branch protection on `nischal94/.github`'s `main` (signed commits
+   required, PR review required, no force-push, no
+   `pull_request_target` workflows).
+3. App private key as `APP_PRIVATE_KEY` repo secret in
+   `nischal94/.github` (rotated annually via the App settings page →
+   re-upload via `gh secret set APP_PRIVATE_KEY &lt; new-key.pem`).
+4. CANARY_PAT (in nischal94/.github secrets; rotated annually,
+   calendar reminder).
+
+## Common operations
+
+### Force re-apply ruleset to all repos
+Trigger `force-sync.yml` with `target=all`.
+
+### Investigate a specific repo's enforcement state
+```bash
+  gh api repos/&lt;owner&gt;/&lt;repo&gt;/rulesets
+</code></pre>
+<h3 id="app-stops-enforcing-canary-opens-issue">App stops enforcing (canary opens issue)<a class="anchor" href="#app-stops-enforcing-canary-opens-issue" title="Permalink to this section">#</a></h3>
+<ol>
+<li>Check https://github.com/settings/apps/nischal94-policy/installations</li>
+<li>If missing, re-install on <code>nischal94</code>. Pick &ldquo;All repositories.&rdquo;</li>
+<li>Note the new installation ID (visible on the installation&rsquo;s
+   settings page URL: <code>/installations/{installation_id}</code>); update
+   this runbook and any workflow references.</li>
+<li>Note the new integration ID (= the App ID, top of the App
+   settings page); update <code>bypass_actors</code> in
+   <code>scripts/policy/canonical-ruleset.json</code> if it changed.</li>
+<li>Trigger <code>force-sync.yml</code> with <code>target=all</code> to rewrite all
+   <code>bypass_actors</code> references with the new integration ID.</li>
+</ol>
+<h3 id="state-file-corrupted">State file corrupted<a class="anchor" href="#state-file-corrupted" title="Permalink to this section">#</a></h3>
+<pre><code class="language-bash">  cd ~/projects/nischal94-dot-github
+  echo '{&quot;schemaVersion&quot;:1,&quot;lastSyncAt&quot;:null,&quot;appInstallationId&quot;:null,&quot;repos&quot;:{}}' &gt; state/configured-repos.json
+  git add state/configured-repos.json
+  git commit -m &quot;fix: reset state file&quot;
+  git push
+  gh workflow run force-sync.yml -f target=all
+</code></pre>
+<h3 id="migration-to-organization-mode-someday">Migration to organization mode (someday)<a class="anchor" href="#migration-to-organization-mode-someday" title="Permalink to this section">#</a></h3>
+<p>See spec §7.3. <strong>Treat as a 1-day project, not an afternoon.</strong>
+Required steps: re-register App on org, re-install, regenerate all
+PATs, re-upload SSH keys, re-enable Actions on every repo, rewrite
+every ruleset&rsquo;s <code>actor_id</code> reference.</p>
+<pre><code>
+- [ ] **Step 2: Commit and push**
+
+```bash
+cd ~/projects/nischal94-dot-github
+git add docs/APP-RUNBOOK.md
+git commit -m &quot;docs: add App operational runbook&quot;
+git push origin main
+</code></pre>
+<h3 id="phase-5-exit-gate">Phase 5 exit gate<a class="anchor" href="#phase-5-exit-gate" title="Permalink to this section">#</a></h3>
+<ul>
+<li>[ ] <code>nischal94/.github</code> README explains what the repo does.</li>
+<li>[ ] <code>nischal94/.github</code> has <code>docs/POLICIES.md</code> and <code>docs/APP-RUNBOOK.md</code>.</li>
+<li>[ ] <code>nischal94/repo-template</code> README rewritten and merged via PR.</li>
+<li>[ ] All docs cross-linked between repos.</li>
+</ul>
+<hr>
+<h2 id="project-complete">Project complete<a class="anchor" href="#project-complete" title="Permalink to this section">#</a></h2>
+<p>After Phase 5 ships:</p>
+<ul>
+<li>Every new repo created on <code>nischal94</code> automatically gets enterprise
+  CI within 5-30 min of creation.</li>
+<li>The system self-audits weekly via <code>drift-audit</code>.</li>
+<li>The App self-monitors via <code>app-canary</code>.</li>
+<li>Documentation is in place for every common operation.</li>
+</ul>
+<p>The implementation plan ends here. Ongoing work (adding language profiles,
+tightening policies, migrating to org mode if/when warranted) is captured
+in the runbook and should be tracked as ordinary issues against
+<code>nischal94/.github</code> going forward.</p>
+<div class="footer">
+  <span>nischal94/repo-template · docs/specs/2026-05-09-enterprise-ci-template-design</span>
+  <span>Rendered from markdown · self-contained</span>
+</div>
+</main>
+</body>
+</html>
