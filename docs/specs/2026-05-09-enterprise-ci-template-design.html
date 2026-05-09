@@ -266,8 +266,8 @@ h2.toc-heading + .toc {
 </div>
 <h1 id="enterprise-ci-template-design">Enterprise CI Template Design<a class="anchor" href="#enterprise-ci-template-design" title="Permalink to this section">#</a></h1>
 <ul>
-<li><strong>Status:</strong> Draft v0.5, pending implementation plan</li>
-<li><strong>Date:</strong> 2026-05-09 (v0.1 → v0.5, same-day revisions)</li>
+<li><strong>Status:</strong> Draft v0.6, Phase 2 implemented + lessons learned</li>
+<li><strong>Date:</strong> 2026-05-09 (v0.1 → v0.5); 2026-05-10 (v0.6 amendment)</li>
 <li><strong>Author:</strong> Nischal (<code>@nischal94</code>)</li>
 <li><strong>Scope:</strong> Future repos created on the <code>nischal94</code> GitHub account</li>
 <li><strong>Non-goals:</strong> Retroactive migration of existing repos; multi-org governance; GHEC-specific features</li>
@@ -277,6 +277,7 @@ h2.toc-heading + .toc {
 <ul>
 <li><a href="#contents">Contents</a></li>
 <li><a href="#changelog">Changelog</a><ul>
+<li><a href="#v06-2026-05-10">v0.6 — 2026-05-10</a></li>
 <li><a href="#v05-2026-05-09">v0.5 — 2026-05-09</a></li>
 <li><a href="#v04-2026-05-09">v0.4 — 2026-05-09</a></li>
 <li><a href="#v03-2026-05-09">v0.3 — 2026-05-09</a></li>
@@ -336,9 +337,35 @@ h2.toc-heading + .toc {
 </li>
 <li><a href="#8-out-of-scope-explicit-non-goals">8. Out of scope (explicit non-goals)</a></li>
 <li><a href="#9-implementation-outline-handed-to-writing-plans-next">9. Implementation outline (handed to writing-plans next)</a></li>
+<li><a href="#10-phase-2-lessons-learned-2026-05-10-amendment">10. Phase 2 lessons learned (2026-05-10 amendment)</a><ul>
+<li><a href="#101-github-app-needs-workflows-write-permission-not-just-contents-write">10.1 GitHub App needs Workflows: write permission, not just Contents: write</a></li>
+<li><a href="#102-empty-repos-created-without-an-initial-commit-have-no-main">10.2 Empty repos created without an initial commit have no main</a></li>
+<li><a href="#103-gh-pr-create-from-a-workflow-needs-the-apps-installation-token-not-github_token">10.3 gh pr create from a workflow needs the App&rsquo;s installation token, not GITHUB_TOKEN</a></li>
+<li><a href="#104-the-state-files-writer-cannot-push-from-inside-a-workflow-due-to-required-signatures">10.4 The state file&rsquo;s writer cannot push from inside a workflow due to required-signatures</a></li>
+<li><a href="#105-osv-scanner-v2-changed-flag-set-exit-code-semantics">10.5 osv-scanner v2 changed flag set + exit-code semantics</a></li>
+<li><a href="#106-scaffold-on-polls-discovery-loop-was-chicken-and-egg">10.6 Scaffold-on-poll&rsquo;s discovery loop was chicken-and-egg</a></li>
+<li><a href="#summary">Summary</a></li>
+</ul>
+</li>
 </ul>
 </div>
 <h2 id="changelog">Changelog<a class="anchor" href="#changelog" title="Permalink to this section">#</a></h2>
+<h3 id="v06-2026-05-10">v0.6 — 2026-05-10<a class="anchor" href="#v06-2026-05-10" title="Permalink to this section">#</a></h3>
+<p>Phase 2 implementation complete. End-to-end lifecycle verified on a
+throwaway test repo. Six implementation-time bugs that the spec did
+not anticipate are documented in the new §10 (Phase 2 lessons learned)
+appendix. The v0.5 spec text is unchanged; v0.6 is a pure addendum
+capturing what implementation taught us.</p>
+<p>Notably:
+- §10.1 documents that the App needs <code>Workflows: write</code> (not just
+  <code>Contents: write</code>) to scaffold workflow files into target repos.
+- §10.4 documents that workflow-side writes to repos under the
+  canonical ruleset must use the Contents API, not <code>git push</code>.</p>
+<p>These two lessons are the most likely to bite future implementers
+building similar systems. The other four (10.2 empty-repo default
+branch, 10.3 cross-repo <code>gh pr create</code> auth, 10.5 osv-scanner v2 flag
+changes, 10.6 scaffold discovery chicken-and-egg) are smaller but
+worth recording.</p>
 <h3 id="v05-2026-05-09">v0.5 — 2026-05-09<a class="anchor" href="#v05-2026-05-09" title="Permalink to this section">#</a></h3>
 <p>Surgical consistency pass after the v0.4 review. No architecture changes.
 Thirteen findings (3 MAJOR, 7 MINOR, 3 NITPICK) addressed in one edit pass:</p>
@@ -1703,6 +1730,89 @@ if/when external contributors join a specific project.</p>
 <p>A detailed implementation plan with task ordering, dependencies, and
 verification steps will be produced by the <code>writing-plans</code> skill in the
 next step.</p>
+<h2 id="10-phase-2-lessons-learned-2026-05-10-amendment">10. Phase 2 lessons learned (2026-05-10 amendment)<a class="anchor" href="#10-phase-2-lessons-learned-2026-05-10-amendment" title="Permalink to this section">#</a></h2>
+<p>The v0.5 spec was implemented end-to-end on 2026-05-09–10. Six bugs
+surfaced during execution that the spec did not anticipate. Each is
+captured here as design context for future implementers (or future-you
+when revisiting these mechanisms).</p>
+<h3 id="101-github-app-needs-workflows-write-permission-not-just-contents-write">10.1 GitHub App needs <code>Workflows: write</code> permission, not just <code>Contents: write</code><a class="anchor" href="#101-github-app-needs-workflows-write-permission-not-just-contents-write" title="Permalink to this section">#</a></h3>
+<p><strong>Bug</strong>: <code>scaffold-on-poll</code>&rsquo;s <code>git push</code> failed on every target repo with
+<code>refusing to allow a GitHub App to create or update workflow .github/workflows/&lt;file&gt; without 'workflows' permission</code>.</p>
+<p><strong>Why</strong>: GitHub gates workflow files (<code>.github/workflows/*</code>) behind a
+<em>separate</em> App permission from <code>contents</code>, specifically to prevent a
+less-privileged App from injecting CI changes. The v0.5 spec §3.3 listed
+permissions but missed <code>workflows: write</code>.</p>
+<p><strong>Fix</strong>: registered Apps must add <code>Workflows: Read and write</code> under
+Repository permissions in addition to <code>Contents: write</code>. After editing
+permissions on the App settings page, the installation must be
+re-accepted (GitHub prompts on the installations page).</p>
+<h3 id="102-empty-repos-created-without-an-initial-commit-have-no-main">10.2 Empty repos created without an initial commit have no <code>main</code><a class="anchor" href="#102-empty-repos-created-without-an-initial-commit-have-no-main" title="Permalink to this section">#</a></h3>
+<p><strong>Bug</strong>: <code>gh repo create &lt;name&gt; --public</code> (without <code>--add-readme</code>) creates
+a repo with <em>no commits and no default branch</em>. When <code>scaffold-on-poll</code>
+clones it, branches off, and pushes its scaffold branch, GitHub
+<em>auto-promotes that branch to default</em> because there&rsquo;s no <code>main</code> to
+beat it. Subsequent <code>gh pr create --base main</code> then fails with &ldquo;no such
+branch.&rdquo;</p>
+<p><strong>Fix</strong>: either (a) always <code>gh repo create --add-readme</code> so the new repo
+has an initial commit on <code>main</code> from creation, or (b) make
+<code>scaffold-on-poll</code> defensive — detect a default branch named anything
+other than <code>main</code> and rename it back. The plan should default to (a)
+because it produces less surprise on the target repo.</p>
+<h3 id="103-gh-pr-create-from-a-workflow-needs-the-apps-installation-token-not-github_token">10.3 <code>gh pr create</code> from a workflow needs the App&rsquo;s installation token, not <code>GITHUB_TOKEN</code><a class="anchor" href="#103-gh-pr-create-from-a-workflow-needs-the-apps-installation-token-not-github_token" title="Permalink to this section">#</a></h3>
+<p><strong>Bug</strong>: After fixing 10.1 and 10.2, <code>git push</code> succeeded but <code>gh pr create</code>
+failed with <code>GraphQL: Resource not accessible by integration (createPullRequest)</code>.</p>
+<p><strong>Why</strong>: <code>gh pr create</code> reads <code>GH_TOKEN</code> from env. The default in a
+workflow is <code>secrets.GITHUB_TOKEN</code>, which is the <em>workflow&rsquo;s</em> per-run
+token (identity: <code>github-actions[bot]</code>). That token has <code>pull-requests:
+write</code> only on the <em>workflow&rsquo;s host repo</em> (<code>nischal94/.github</code>), not
+cross-repo on the scaffold target. The App&rsquo;s installation token IS
+cross-repo authorized (App is installed on All Repositories), but it
+must be passed explicitly.</p>
+<p><strong>Fix</strong>: prefix the call with <code>GH_TOKEN="$TOKEN" gh pr create ...</code> where
+<code>$TOKEN</code> is the App&rsquo;s installation token from <code>mint_installation_token</code>.
+Single-line fix.</p>
+<h3 id="104-the-state-files-writer-cannot-push-from-inside-a-workflow-due-to-required-signatures">10.4 The state file&rsquo;s writer cannot push from inside a workflow due to required-signatures<a class="anchor" href="#104-the-state-files-writer-cannot-push-from-inside-a-workflow-due-to-required-signatures" title="Permalink to this section">#</a></h3>
+<p><strong>Bug</strong>: <code>commit_state</code> originally used <code>git push origin main</code> to commit
+state-file changes. The push was rejected by the canonical ruleset&rsquo;s
+<code>required_signatures</code> rule. Even adding <code>bypass_actors</code> for the App
+didn&rsquo;t help, because the workflow&rsquo;s <code>git push</code> authenticates as
+<code>github-actions[bot]</code> (the workflow&rsquo;s GITHUB_TOKEN), not as the App.</p>
+<p><strong>Fix</strong>: rewrite <code>commit_state</code> to use the GitHub Contents API
+(<code>PUT /repos/{owner}/{repo}/contents/state/configured-repos.json</code>) with
+the App&rsquo;s installation token. The Contents API web-flow-signs commits
+on the server side (satisfies <code>required_signatures</code>) and authenticates
+as the App (<code>bypass_actors</code> recognizes it).</p>
+<p>The lesson generalizes: any workflow-side write to a repo under the
+canonical ruleset must use the Contents API, not local <code>git push</code>.</p>
+<h3 id="105-osv-scanner-v2-changed-flag-set-exit-code-semantics">10.5 <code>osv-scanner</code> v2 changed flag set + exit-code semantics<a class="anchor" href="#105-osv-scanner-v2-changed-flag-set-exit-code-semantics" title="Permalink to this section">#</a></h3>
+<p><strong>Bug</strong>: The original Phase 1 workflow referenced
+<code>google/osv-scanner-action/osv-scanner-action@&lt;sha&gt;</code> — a path that
+doesn&rsquo;t exist (doubled segment). Replacement with the v2 CLI directly
+revealed two more issues: (a) <code>--skip-git</code> was removed in v2 (now
+implicit default), and (b) v2 exits 128 (not 0) when no manifests are
+found in the scanned dir.</p>
+<p><strong>Fix</strong>: install <code>osv-scanner</code> from the GitHub release directly. Use the
+<code>scan source</code> subcommand with <code>--recursive</code> only. Treat exit 128 as
+success (<code># nothing to scan, this repo has no manifests</code>).</p>
+<h3 id="106-scaffold-on-polls-discovery-loop-was-chicken-and-egg">10.6 Scaffold-on-poll&rsquo;s discovery loop was chicken-and-egg<a class="anchor" href="#106-scaffold-on-polls-discovery-loop-was-chicken-and-egg" title="Permalink to this section">#</a></h3>
+<p>The original v0.5 design had <code>scaffold-on-poll</code> keying off
+<code>state/configured-repos.json</code> to find scaffold candidates. But
+un-scaffolded repos aren&rsquo;t in that file (only post-enforcement repos
+get added). So scaffold-on-poll had no data when it should have had
+the most.</p>
+<p><strong>Fix</strong>: scaffold-on-poll discovers candidates by querying the App&rsquo;s
+installation list directly (same source enforce-on-poll uses), then
+probes each repo for the marker file
+(<code>.github/policy/.scaffolded-by-nischal94-policy</code>). Repos <em>without</em> the
+marker are scaffold candidates. The two workflows now use the same data
+source, with opposite filters.</p>
+<h3 id="summary">Summary<a class="anchor" href="#summary" title="Permalink to this section">#</a></h3>
+<p>All 6 bugs are now fixed in the deployed <code>nischal94/.github</code> workflows.
+The v0.5 spec text remains canonical for the <em>intent</em>; this addendum
+captures the <em>implementation realities</em> that emerged during execution.
+Future implementers building similar systems should expect to hit
+analogous issues — particularly 10.1 (the Workflows permission) and
+10.4 (the Contents API requirement for workflow-side state writes).</p>
 <div class="footer">
   <span>nischal94/repo-template · docs/specs/2026-05-09-enterprise-ci-template-design</span>
   <span>Rendered from markdown · self-contained</span>
