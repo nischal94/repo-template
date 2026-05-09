@@ -1,12 +1,52 @@
 # Enterprise CI Template Design
 
-- **Status:** Draft v0.3, pending implementation plan
-- **Date:** 2026-05-09 (v0.1, v0.2, v0.3 same-day revisions)
+- **Status:** Draft v0.4, pending implementation plan
+- **Date:** 2026-05-09 (v0.1 → v0.4, same-day revisions)
 - **Author:** Nischal (`@nischal94`)
 - **Scope:** Future repos created on the `nischal94` GitHub account
 - **Non-goals:** Retroactive migration of existing repos; multi-org governance; GHEC-specific features
 
 ## Changelog
+
+### v0.4 — 2026-05-09
+
+**Pragmatic simplification for solo-dev scope.** v0.3 mandated 1Password
+Connect + OIDC + hardware MFA on the secret-manager root, citing a
+"world-class enterprise" framing. After honest reassessment for the
+actual user (solo developer, no contributors, no `pull_request_target`
+workflows planned), the cost/benefit shifted toward GitHub-native
+hardening:
+
+- **§3.3c rewritten**: App private key now lives in `nischal94/.github`
+  as a regular Actions secret named `APP_PRIVATE_KEY`. External secret
+  manager dropped. The threat model that justified Connect + hardware
+  MFA (untrusted contributors with PR access) does not currently apply.
+  When it does, upgrade path is documented.
+- **TOTP MFA on the GitHub account login** is the new authentication
+  floor. Stronger than password-only, weaker than a YubiKey. Documented
+  honestly. YubiKey upgrade path noted as future improvement.
+- **Branch protection on `nischal94/.github`'s `main`** carries the
+  trust boundary: signed commits required, PR review required, no
+  force-push, no deletion, no `pull_request_target` workflows ever.
+- **Environment-protection-with-required-reviewer dropped**. On a solo
+  account it was a self-approval click, not a real authorization gate.
+  The honest move is to remove the false sense of security and
+  document the actual trust boundary instead.
+- **§7.2 rewritten** to reflect the new (simpler, more honest) trust
+  model. The recursive-trust analysis collapses: there's no external
+  secret manager root credential to worry about anymore; the only
+  trust root is "your GitHub login + TOTP."
+- **Spec is shorter overall** (~80 lines net reduction): the OIDC
+  trust policy JSON, the 1Password Connect setup flow, the recursive
+  trust paragraphs, and the environment-gate caveat all leave with
+  the v0.3 design.
+
+This is a *deliberate downgrade* from v0.3's stated bar (SLSA L3 /
+Scorecard ≥ 7) to a pragmatic solo-dev floor. The build-provenance
+(SLSA L3) machinery stays — that has nothing to do with secret
+storage. What changes is the App-key trust root, which is now
+"GitHub repo secret protected by branch protection" instead of
+"external secret manager protected by hardware MFA."
 
 ### v0.3 — 2026-05-09
 
@@ -252,8 +292,9 @@ concurrency:
   group: state-writer        # SHARED across all four workflows
   cancel-in-progress: false
 permissions:
-  contents: read
-  id-token: write             # for OIDC to the secret manager
+  contents: write             # for state-file commits + scaffold PRs
+  pull-requests: write        # for drift PRs and scaffold PRs
+  issues: write               # for drift-audit issues
 ```
 
 `cancel-in-progress: false` is intentional — overlapping runs must
@@ -286,78 +327,82 @@ genuinely needs to write back to state is the responsibility of
 The App's private key is the root of trust for all enforcement. Where
 it lives determines who can compromise the entire system.
 
-Three placements considered, with their trust roots stated honestly:
+**Decision for v0.4: GitHub repo secret + GitHub-native hardening.**
 
-**Option 3.3c-A — Repo secret in `nischal94/.github`** (the v0.1 design):
-trust root is "anyone who can land a workflow change in `nischal94/.github`,
-including via a malicious PR using `pull_request_target`." Rejected.
+The key lives in `nischal94/.github` as a regular Actions secret named
+`APP_PRIVATE_KEY`. The trust boundary is GitHub itself, hardened by
+specific controls listed below. No external secret manager.
 
-**Option 3.3c-B — External secret manager (1Password Connect / AWS KMS /
-GCP Secret Manager) pulled at runtime via OIDC**: trust root is
-"GitHub's OIDC issuer + the trust policy on the secret manager." The trust
-policy must pin both the repo and the environment.
+**Why this and not external secret management:**
 
-The OIDC token claim values to bind in your secret manager's trust
-policy:
+The earlier v0.3 design mandated 1Password Connect + OIDC + hardware
+MFA on the secret-manager root. That defended against threats which
+do not currently apply to this account: untrusted contributors with
+PR-trigger access, multi-tenant secret stores, regulated-environment
+audit requirements. None of these apply to a solo developer with no
+collaborators, no `pull_request_target` workflows, and no enterprise
+customers doing security due diligence yet.
 
+The honest trade is: the v0.4 design is **measurably weaker** than
+v0.3 against an attacker who compromises the GitHub session, but
+**measurably stronger** against operational complexity (a Connect
+server can fail; an external secret manager adds vendor risk; recursive
+trust through additional credentials creates more surface, not less,
+on a solo account). For the actual threat model, this is the right
+trade.
+
+**Required protections on `nischal94/.github`** (these are the trust
+boundary):
+
+1. **Branch protection on `main`** (already enforced as part of the
+   canonical ruleset that the App applies to itself): signed commits
+   required, 1 PR review required, no force-push, no deletion, all
+   required status checks must pass.
+2. **No `pull_request_target` workflows ever in this repo.** This
+   trigger lets PRs from forks run with secret access — exactly the
+   attack vector that justified external secret management. Documented
+   here as a never-do; enforced by review discipline (the App canary
+   does not detect this; humans must).
+3. **TOTP MFA on the GitHub account login** (`nischal94`). Authenticator
+   app such as Authy, 1Password, or Google Authenticator. Stronger than
+   password-only; weaker than a hardware security key. See §7.2 for the
+   honest trade and the YubiKey upgrade path.
+4. **Annual rotation of the App private key.** Generate a new key in
+   the App settings, replace `APP_PRIVATE_KEY` in repo secrets, revoke
+   the old key. ~5-minute task, calendar reminder.
+
+**What workflows do at runtime:**
+
+```yaml
+# In each of the four enforcement workflows in nischal94/.github:
+permissions:
+  contents: write     # for state-file commits + scaffold PRs
+env:
+  APP_ID: ${{ vars.APP_ID }}
+  APP_INSTALLATION_ID: ${{ vars.APP_INSTALLATION_ID }}
+  APP_INTEGRATION_ID: ${{ vars.APP_INTEGRATION_ID }}
+  APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
 ```
-sub: repo:nischal94/.github:environment:prod-app-key
-aud: <provider-specific custom audience, configured in the workflow>
-```
 
-**Actual trust-policy structure is provider-specific.** For AWS IAM,
-wrap the claim conditions in `Effect`/`Principal`/`Condition.StringEquals`.
-For GCP Workload Identity Pool, configure attribute mappings on the
-provider. For 1Password Connect, see [their OIDC integration guide](https://developer.1password.com/docs/connect/manage-secrets/integrate-with-github-actions).
-The implementation plan picks one provider; the trust policy is
-authored against that provider's schema.
+`APP_ID`, `APP_INSTALLATION_ID`, `APP_INTEGRATION_ID` are stored as
+*repository variables* (not secrets — they're not sensitive; they're
+account-level identifiers that appear in every API URL). Only the
+private key needs `secrets:` treatment.
 
-The workflow declares `environment: prod-app-key` to mint a token whose
-OIDC claim includes that environment binding. The environment must require
-*manual approval* before the deployment runs.
+**Upgrade path** (when threat model changes):
 
-**Recursive-trust caveat (the secret-manager root credential is a new SPOC).**
-OIDC-based access from GitHub to the secret manager removes the App key
-from GitHub repo secrets — a real improvement. But the secret manager
-itself must be authenticated by *something*: AWS root account credentials,
-GCP project owner login, or the 1Password master password. On a solo
-account these credentials are inevitably held by you alone — they
-*are* a single point of compromise, just relocated.
+If you later have collaborators, ship a public-facing product, or take
+on enterprise customers who do security due diligence, upgrade in
+this order — each step independently improves security:
 
-What this design buys is a **harder compromise surface**, not its
-elimination:
-- Before v0.2: "push to `nischal94/.github`'s `main` branch" → can read
-  the App key from the repo secret. One step.
-- After v0.2: "compromise the GitHub session AND the secret-manager
-  root credentials AND (if hardware-keyed) physical possession of the
-  hardware key" → can read the App key. Three independent factors.
-
-**Required mitigation**: hardware MFA on the secret-manager root
-credentials (AWS hardware MFA token / GCP Titan Security Key /
-1Password biometric+device-trust). This converts the recursive trust
-from "still a software-only chain" to "requires physical access at
-the root." Documented in the threat model.
-
-**Honest caveat**: as a solo dev, "manual approval by self" is a
-self-approval. GitHub's environment-protection feature lets you require
-approval but cannot prevent self-approval on a personal account. So the
-environment gate becomes a "click-to-approve" speed bump, not a true
-two-person rule. It still buys real value: it converts compromise from
-"silent push to main steals the key" to "attacker must trigger the
-workflow and click the approval button while logged in as you."
-
-**Option 3.3c-C — Repo secret + protected environment + branch protection
-on `nischal94/.github`** (no external manager): trust root is
-"push-to-main on `nischal94/.github`, gated by required PR review +
-required signed commits + required status checks." Solo-dev limitation:
-required-PR-review with self-approval-disabled is not enforceable on
-personal accounts.
-
-**Decision for v0.2**: ship 3.3c-B. The environment+OIDC approach is
-the strongest available on a user account today. The "self-approval"
-caveat is documented in §7.2 as a known limitation. If you ever convert
-to org mode, replace the environment gate with required-reviewer-not-self
-on the org's `.github` repo (which orgs *can* enforce).
+1. **Hardware security key (YubiKey) on GitHub login** — replaces
+   TOTP. ~$50 one-time. Phishing-resistant.
+2. **External secret manager** (1Password Connect or AWS KMS) — moves
+   the App key off GitHub. Re-introduces the recursive-trust complexity
+   v0.3 documented, so only worth doing when threat model justifies it.
+3. **Convert to organization mode** — see §7.3. Substantial migration,
+   but unlocks org-level rulesets, required-reviewer-not-self gates,
+   and audit log retention.
 
 #### 3.3d Race window characterization
 
@@ -865,14 +910,42 @@ work this is acceptable (you don't push secrets to a brand-new repo in
 its first hour). For projects requiring sub-minute response, the opt-in
 webhook receiver path is documented as future work in §3.3d.
 
-### 7.2 App private key trust root has a self-approval caveat
+### 7.2 App private key trust root is "your GitHub login + TOTP"
 
-Per §3.3c: the environment-protection-with-required-reviewer pattern
-mitigates "compromise of `.github/main` push access" but cannot enforce
-two-person-rule on a personal account (you can self-approve your own
-deployments). Treat the environment gate as a click-to-approve speed
-bump, not a true authorization. If you ever convert to org mode, this
-limitation goes away (orgs can require non-self approvers).
+Per §3.3c: the App private key lives in `nischal94/.github` as a
+regular Actions secret. The trust boundary is therefore:
+
+1. **GitHub session compromise** → attacker can push to `.github/main`
+   (gated by branch protection — needs PR + signed commit, but on a
+   solo account self-approval is possible).
+2. **GitHub login compromise** → attacker can read the secret directly
+   via the API or by triggering a workflow that exfiltrates it.
+
+The login compromise vector is the bigger risk. Mitigations in v0.4:
+
+- **TOTP MFA on the GitHub account** (Authy / 1Password / Google
+  Authenticator). Defends against passive password reuse and most
+  credential-stuffing attacks. Vulnerable to real-time phishing — an
+  attacker who tricks you into typing both password and TOTP code on
+  a fake page within ~30 seconds wins.
+- **Branch protection on `nischal94/.github`** ensures even with push
+  access, code changes need PR + signed commit. Self-approval limits
+  this to "speed bump" not "two-person rule."
+- **No `pull_request_target` workflows** in `nischal94/.github` —
+  closes the malicious-PR exfiltration path.
+
+**YubiKey upgrade path**: enrolling a hardware security key on the
+GitHub account login closes the real-time phishing vector. Cost: ~$50
+one-time, ~10 min enrollment. Strongly recommended when this account
+ever touches anything sensitive (real customer data, paying users,
+production systems with revenue impact). Until then, TOTP is the
+honest middle.
+
+**Honest summary**: a determined attacker who phishes you in real-time
+and gets through TOTP can compromise the App key. This is the same
+threat that compromises every other secret you have on GitHub today
+(repo secrets, PATs, OAuth tokens). The App key is not specially
+protected; it inherits whatever security your GitHub login has.
 
 ### 7.3 Migration to organization mode is a substantial project, not an upgrade
 
@@ -970,17 +1043,18 @@ if/when external contributors join a specific project.
 In rough order of dependency:
 
 1. Register the `nischal94-policy` GitHub App. Permissions per §3.3.
-   Generate private key; store in 1Password Connect / AWS KMS / GCP
-   Secret Manager (one chosen during implementation, not specified
-   here). Configure OIDC trust policy per §3.3c.
+   Generate private key; store as `APP_PRIVATE_KEY` repo secret in
+   `nischal94/.github` per §3.3c. Enable TOTP MFA on the GitHub
+   account login if not already.
 2. Create `nischal94/.github` repo (currently does not exist). Seed with:
    - Community files (§3.8)
    - Layer 1 universal workflows (§3.1, §3.2)
    - `policies/canonical-ruleset.json`
    - `policies/required-checks.yml`
    - `state/configured-repos.json` (initially empty)
-   - `protected environment: prod-app-key` configured with required
-     reviewer + manual approval
+   - Repository secret: `APP_PRIVATE_KEY` (the App's `.pem` contents)
+   - Repository variables: `APP_ID`, `APP_INSTALLATION_ID`,
+     `APP_INTEGRATION_ID`
 3. Implement `enforce-on-poll.yml` (§3.3b). Smoke-test:
    - Create throwaway repo `nischal94/test-enforcement-1`
    - Wait for the next poll
