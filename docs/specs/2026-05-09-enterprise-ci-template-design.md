@@ -447,15 +447,16 @@ boundary):
    `pull_request_target:`. Tracked as a v2 improvement; v1 ships
    without it because the social-enforcement bar is acceptable on a
    solo account where every workflow change passes through the author.
-3. **TOTP MFA on the GitHub account login** (`nischal94`). Authenticator
-   app such as Authy, 1Password, or Google Authenticator. Stronger than
-   password-only; weaker than a hardware security key. See §7.2 for the
-   honest trade and the YubiKey upgrade path. **Recovery codes**: when
-   you enable TOTP, GitHub displays 16 single-use recovery codes. Store
-   them in your password manager (1Password, Bitwarden, Keychain) — NOT
-   in `nischal94/.github` (would defeat the point) and NOT only on the
+3. **2FA on the GitHub account login** (`nischal94`). Use a TOTP
+   authenticator app (Google Authenticator, Authy, or your password
+   manager's built-in TOTP) at minimum; passkeys and security keys
+   (WebAuthn) are stronger and supported as additional methods. See
+   §7.2 for the honest trade-offs across these options. **Recovery
+   codes**: when you enable 2FA, GitHub displays 16 single-use recovery
+   codes. Store them somewhere persistent and offline — NOT inside
+   `nischal94/.github` (would defeat the point) and NOT only on the
    device that holds the TOTP authenticator (loss of that device leaves
-   you locked out). If the TOTP device is later lost, recovery codes
+   you locked out). If the 2FA device is later lost, recovery codes
    are the only path back to the account.
 4. **Annual rotation of the App private key.** Generate a new key in
    the App settings, replace `APP_PRIVATE_KEY` in repo secrets, revoke
@@ -1036,11 +1037,13 @@ session/login itself uncompromised.
 
 The login compromise vector is the bigger risk. Mitigations in v0.4:
 
-- **TOTP MFA on the GitHub account** (Authy / 1Password / Google
-  Authenticator). Defends against passive password reuse and most
-  credential-stuffing attacks. Vulnerable to real-time phishing — an
-  attacker who tricks you into typing both password and TOTP code on
-  a fake page within ~30 seconds wins.
+- **2FA on the GitHub account** (TOTP via Google Authenticator/Authy,
+  with passkey and security-key options also supported). Defends
+  against passive password reuse and most credential-stuffing attacks.
+  TOTP alone is vulnerable to real-time phishing — an attacker who
+  tricks you into typing both password and TOTP code on a fake page
+  within ~30 seconds wins; passkeys and security keys are phishing-
+  resistant and close that gap.
 - **Branch protection on `nischal94/.github`** ensures even with push
   access, code changes need PR + signed commit. Self-approval limits
   this to "speed bump" not "two-person rule."
