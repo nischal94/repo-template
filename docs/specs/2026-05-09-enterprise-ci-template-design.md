@@ -11,7 +11,7 @@
 ### v0.5 — 2026-05-09
 
 Surgical consistency pass after the v0.4 review. No architecture changes.
-Eight findings (2 MAJOR, 4 MINOR, 2 NITPICK) addressed in one edit pass:
+Thirteen findings (3 MAJOR, 7 MINOR, 3 NITPICK) addressed in one edit pass:
 
 - **§6**: corrected stale "Vercel Deploy: cd-deploy.yml (OIDC, no
   VERCEL_TOKEN)" to match §4.6's honest gap framing. The "OIDC for
@@ -993,20 +993,18 @@ webhook receiver path is documented as future work in §3.3d.
 Per §3.3c: the App private key lives in `nischal94/.github` as a
 regular Actions secret. The trust boundary is therefore:
 
-1. **GitHub session compromise** → attacker has at least three direct
-   exfiltration paths, none of which branch protection mediates:
-   - Read `APP_PRIVATE_KEY` via the GitHub Settings UI (repo →
-     Settings → Secrets — secrets ARE re-displayable when the
-     "show value" / "update" UI surfaces; on certain account states
-     they're written to clipboards).
-   - Read via the [secrets REST API](https://docs.github.com/en/rest/actions/secrets)
-     (returns metadata only — values are write-only — so this path is
-     blocked, but the attacker can *overwrite* the secret with their
-     own key).
-   - Open a self-approved workflow PR that exfiltrates the secret to
-     an external endpoint (`echo "$APP_PRIVATE_KEY" | curl`) — branch
-     protection requires PR + signed commit but on a solo account
-     self-approval makes this a speed bump, not an authorization gate.
+1. **GitHub session compromise** → attacker has two direct attack
+   paths, neither of which branch protection mediates:
+   - **Overwrite** `APP_PRIVATE_KEY` via the [secrets REST API](https://docs.github.com/en/rest/actions/secrets)
+     or the Settings UI. Values are write-only after creation
+     (existing secrets cannot be revealed), but the attacker doesn't
+     need to read the existing key — they can replace it with their
+     own and then mint installation tokens at will.
+   - **Open a self-approved workflow PR** that exfiltrates the
+     existing secret to an external endpoint
+     (`echo "$APP_PRIVATE_KEY" | curl`) — branch protection requires
+     PR + signed commit but on a solo account self-approval makes
+     this a speed bump, not an authorization gate.
 2. **GitHub login compromise** (no live session yet) → attacker
    bypasses TOTP via real-time phishing, then has all the paths above.
 
@@ -1150,17 +1148,16 @@ In rough order of dependency:
    - Repository secret: `APP_PRIVATE_KEY` (the App's `.pem` contents)
    - Repository variables: `APP_ID`, `APP_INSTALLATION_ID`,
      `APP_INTEGRATION_ID`
-
-   **Bootstrap circularity** (must be handled here): the App is
-   *housed in* `nischal94/.github`, so it cannot self-protect that
-   repo before its first run. Manually apply
-   `policies/canonical-ruleset.json` to `nischal94/.github` itself
-   via `gh api -X POST repos/nischal94/.github/rulesets -F @policies/canonical-ruleset.json`
-   immediately after seeding, BEFORE pushing the App's first commit.
-   Otherwise the trust-root repo sits unprotected through the
-   first poll cycle. After this manual application, all future
-   ruleset updates flow through the standard `force-sync.yml` /
-   `enforce-on-poll.yml` paths.
+   - **Bootstrap circularity, must be handled here**: the App is
+     *housed in* `nischal94/.github`, so it cannot self-protect that
+     repo before its first run. Manually apply
+     `policies/canonical-ruleset.json` to `nischal94/.github` itself
+     via `gh api -X POST repos/nischal94/.github/rulesets -F @policies/canonical-ruleset.json`
+     immediately after seeding, BEFORE pushing the App's first commit.
+     Otherwise the trust-root repo sits unprotected through the
+     first poll cycle. After this manual application, all future
+     ruleset updates flow through the standard `force-sync.yml` /
+     `enforce-on-poll.yml` paths.
 3. Implement `enforce-on-poll.yml` (§3.3b). Smoke-test:
    - Create throwaway repo `nischal94/test-enforcement-1`
    - Wait for the next poll

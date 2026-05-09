@@ -341,7 +341,7 @@ h2.toc-heading + .toc {
 <h2 id="changelog">Changelog<a class="anchor" href="#changelog" title="Permalink to this section">#</a></h2>
 <h3 id="v05-2026-05-09">v0.5 — 2026-05-09<a class="anchor" href="#v05-2026-05-09" title="Permalink to this section">#</a></h3>
 <p>Surgical consistency pass after the v0.4 review. No architecture changes.
-Eight findings (2 MAJOR, 4 MINOR, 2 NITPICK) addressed in one edit pass:</p>
+Thirteen findings (3 MAJOR, 7 MINOR, 3 NITPICK) addressed in one edit pass:</p>
 <ul>
 <li><strong>§6</strong>: corrected stale &ldquo;Vercel Deploy: cd-deploy.yml (OIDC, no
   VERCEL_TOKEN)&rdquo; to match §4.6&rsquo;s honest gap framing. The &ldquo;OIDC for
@@ -1528,20 +1528,18 @@ webhook receiver path is documented as future work in §3.3d.</p>
 <p>Per §3.3c: the App private key lives in <code>nischal94/.github</code> as a
 regular Actions secret. The trust boundary is therefore:</p>
 <ol>
-<li><strong>GitHub session compromise</strong> → attacker has at least three direct
-   exfiltration paths, none of which branch protection mediates:
-   - Read <code>APP_PRIVATE_KEY</code> via the GitHub Settings UI (repo →
-     Settings → Secrets — secrets ARE re-displayable when the
-     &ldquo;show value&rdquo; / &ldquo;update&rdquo; UI surfaces; on certain account states
-     they&rsquo;re written to clipboards).
-   - Read via the <a href="https://docs.github.com/en/rest/actions/secrets">secrets REST API</a>
-     (returns metadata only — values are write-only — so this path is
-     blocked, but the attacker can <em>overwrite</em> the secret with their
-     own key).
-   - Open a self-approved workflow PR that exfiltrates the secret to
-     an external endpoint (<code>echo "$APP_PRIVATE_KEY" | curl</code>) — branch
-     protection requires PR + signed commit but on a solo account
-     self-approval makes this a speed bump, not an authorization gate.</li>
+<li><strong>GitHub session compromise</strong> → attacker has two direct attack
+   paths, neither of which branch protection mediates:
+   - <strong>Overwrite</strong> <code>APP_PRIVATE_KEY</code> via the <a href="https://docs.github.com/en/rest/actions/secrets">secrets REST API</a>
+     or the Settings UI. Values are write-only after creation
+     (existing secrets cannot be revealed), but the attacker doesn&rsquo;t
+     need to read the existing key — they can replace it with their
+     own and then mint installation tokens at will.
+   - <strong>Open a self-approved workflow PR</strong> that exfiltrates the
+     existing secret to an external endpoint
+     (<code>echo "$APP_PRIVATE_KEY" | curl</code>) — branch protection requires
+     PR + signed commit but on a solo account self-approval makes
+     this a speed bump, not an authorization gate.</li>
 <li><strong>GitHub login compromise</strong> (no live session yet) → attacker
    bypasses TOTP via real-time phishing, then has all the paths above.</li>
 </ol>
@@ -1665,43 +1663,43 @@ if/when external contributors join a specific project.</p>
    - <code>state/configured-repos.json</code> (initially empty)
    - Repository secret: <code>APP_PRIVATE_KEY</code> (the App&rsquo;s <code>.pem</code> contents)
    - Repository variables: <code>APP_ID</code>, <code>APP_INSTALLATION_ID</code>,
-     <code>APP_INTEGRATION_ID</code></li>
-</ol>
-<p><strong>Bootstrap circularity</strong> (must be handled here): the App is
-   <em>housed in</em> <code>nischal94/.github</code>, so it cannot self-protect that
-   repo before its first run. Manually apply
-   <code>policies/canonical-ruleset.json</code> to <code>nischal94/.github</code> itself
-   via <code>gh api -X POST repos/nischal94/.github/rulesets -F @policies/canonical-ruleset.json</code>
-   immediately after seeding, BEFORE pushing the App&rsquo;s first commit.
-   Otherwise the trust-root repo sits unprotected through the
-   first poll cycle. After this manual application, all future
-   ruleset updates flow through the standard <code>force-sync.yml</code> /
-   <code>enforce-on-poll.yml</code> paths.
-3. Implement <code>enforce-on-poll.yml</code> (§3.3b). Smoke-test:
+     <code>APP_INTEGRATION_ID</code>
+   - <strong>Bootstrap circularity, must be handled here</strong>: the App is
+     <em>housed in</em> <code>nischal94/.github</code>, so it cannot self-protect that
+     repo before its first run. Manually apply
+     <code>policies/canonical-ruleset.json</code> to <code>nischal94/.github</code> itself
+     via <code>gh api -X POST repos/nischal94/.github/rulesets -F @policies/canonical-ruleset.json</code>
+     immediately after seeding, BEFORE pushing the App&rsquo;s first commit.
+     Otherwise the trust-root repo sits unprotected through the
+     first poll cycle. After this manual application, all future
+     ruleset updates flow through the standard <code>force-sync.yml</code> /
+     <code>enforce-on-poll.yml</code> paths.</li>
+<li>Implement <code>enforce-on-poll.yml</code> (§3.3b). Smoke-test:
    - Create throwaway repo <code>nischal94/test-enforcement-1</code>
    - Wait for the next poll
    - Verify the canonical ruleset is applied via
      <code>gh api repos/nischal94/test-enforcement-1/rulesets</code>
    - Verify the state file is updated
-   - Verify a second poll is a no-op
-4. Implement <code>scaffold-on-poll.yml</code> (§3.3b). Smoke-test that it opens a
-   PR into <code>test-enforcement-1</code> materializing the Layer 1 workflows.
-5. Implement <code>drift-audit.yml</code> (§3.4). Smoke-test by manually corrupting
+   - Verify a second poll is a no-op</li>
+<li>Implement <code>scaffold-on-poll.yml</code> (§3.3b). Smoke-test that it opens a
+   PR into <code>test-enforcement-1</code> materializing the Layer 1 workflows.</li>
+<li>Implement <code>drift-audit.yml</code> (§3.4). Smoke-test by manually corrupting
    the ruleset on <code>test-enforcement-1</code> and verifying drift is detected
-   and a PR is opened.
-6. Implement <code>force-sync.yml</code> (§3.3b). Smoke-test manual dispatch.
-7. Refactor <code>nischal94/repo-template</code> per §4: add <code>.github/scripts/</code>,
+   and a PR is opened.</li>
+<li>Implement <code>force-sync.yml</code> (§3.3b). Smoke-test manual dispatch.</li>
+<li>Refactor <code>nischal94/repo-template</code> per §4: add <code>.github/scripts/</code>,
    <code>stacks.yml</code> example, eight language profile workflows, OIDC-based
-   <code>cd-deploy.yml</code>, <code>slsa-github-generator</code>-based release workflow.
-8. Replace <code>bootstrap.sh</code> per §4.7 (drop branch-protection logic, keep
-   stack scaffolding).
-9. Add <code>LICENSE-OVERRIDE.md</code> mechanism and the <code>license-check.yml</code>
-   workflow.
-10. Smoke-test end-to-end: create <code>nischal94/test-fullstack-1</code> from the
+   <code>cd-deploy.yml</code>, <code>slsa-github-generator</code>-based release workflow.</li>
+<li>Replace <code>bootstrap.sh</code> per §4.7 (drop branch-protection logic, keep
+   stack scaffolding).</li>
+<li>Add <code>LICENSE-OVERRIDE.md</code> mechanism and the <code>license-check.yml</code>
+   workflow.</li>
+<li>Smoke-test end-to-end: create <code>nischal94/test-fullstack-1</code> from the
     template, wait for the polling cycle, verify ruleset + workflows +
-    bootstrap PR all land correctly.
-11. Document the system in this repo&rsquo;s <code>README.md</code> and link from each
-    new repo&rsquo;s auto-generated README.</p>
+    bootstrap PR all land correctly.</li>
+<li>Document the system in this repo&rsquo;s <code>README.md</code> and link from each
+    new repo&rsquo;s auto-generated README.</li>
+</ol>
 <p>A detailed implementation plan with task ordering, dependencies, and
 verification steps will be produced by the <code>writing-plans</code> skill in the
 next step.</p>
