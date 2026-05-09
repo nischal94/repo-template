@@ -1,0 +1,1535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="markdown-py">
+<title>Enterprise CI Template Design</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --fg: #1f2328;
+  --muted: #59636e;
+  --border: #d1d9e0;
+  --border-muted: #d8dee4;
+  --code-bg: #f6f8fa;
+  --code-fg: #1f2328;
+  --link: #0969da;
+  --link-hover: #0550ae;
+  --accent: #d97757;
+  --table-stripe: #f6f8fa;
+  --kbd-bg: #f6f8fa;
+  --kbd-border: #d1d9e0;
+  --critical: #cf222e;
+  --warning: #9a6700;
+  --success: #1a7f37;
+  --info: #0969da;
+  --quote-border: #d1d9e0;
+  --shadow: 0 1px 3px rgba(31, 35, 40, 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --fg: #e6edf3;
+    --muted: #8d96a0;
+    --border: #30363d;
+    --border-muted: #21262d;
+    --code-bg: #161b22;
+    --code-fg: #e6edf3;
+    --link: #4493f8;
+    --link-hover: #58a6ff;
+    --accent: #ec8866;
+    --table-stripe: #161b22;
+    --kbd-bg: #161b22;
+    --kbd-border: #30363d;
+    --critical: #ff7b72;
+    --warning: #d29922;
+    --success: #3fb950;
+    --info: #58a6ff;
+    --quote-border: #30363d;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--fg);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.page {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 48px 32px 96px;
+}
+
+@media (max-width: 720px) {
+  .page { padding: 24px 16px 64px; }
+}
+
+.meta-banner {
+  font-size: 13px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border-muted);
+  padding-bottom: 12px;
+  margin-bottom: 32px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+.meta-banner .badge {
+  background: var(--code-bg);
+  border: 1px solid var(--border-muted);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.meta-banner .badge.draft {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  line-height: 1.25;
+  margin-top: 32px;
+  margin-bottom: 16px;
+  scroll-margin-top: 16px;
+}
+h1 { font-size: 2em; padding-bottom: 0.3em; border-bottom: 1px solid var(--border-muted); margin-top: 0; }
+h2 { font-size: 1.5em; padding-bottom: 0.3em; border-bottom: 1px solid var(--border-muted); }
+h3 { font-size: 1.25em; }
+h4 { font-size: 1em; color: var(--muted); }
+
+h1 .anchor, h2 .anchor, h3 .anchor, h4 .anchor {
+  opacity: 0;
+  margin-left: 8px;
+  font-size: 0.8em;
+  text-decoration: none;
+  color: var(--muted);
+  transition: opacity 0.15s ease;
+}
+h1:hover .anchor, h2:hover .anchor, h3:hover .anchor, h4:hover .anchor { opacity: 1; }
+
+a { color: var(--link); text-decoration: none; }
+a:hover { color: var(--link-hover); text-decoration: underline; }
+
+p { margin: 0 0 16px; }
+
+ul, ol { margin: 0 0 16px; padding-left: 28px; }
+li { margin-bottom: 4px; }
+li > p { margin-bottom: 8px; }
+ul ul, ul ol, ol ul, ol ol { margin-bottom: 0; }
+
+strong { font-weight: 600; color: var(--fg); }
+em { font-style: italic; }
+
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 85%;
+  background: var(--code-bg);
+  padding: 0.2em 0.4em;
+  border-radius: 6px;
+  color: var(--code-fg);
+}
+
+pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 16px;
+  overflow-x: auto;
+  font-size: 85%;
+  line-height: 1.45;
+  margin: 0 0 16px;
+  border: 1px solid var(--border-muted);
+}
+pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 100%;
+  border-radius: 0;
+}
+
+table {
+  border-collapse: collapse;
+  margin: 0 0 16px;
+  width: 100%;
+  display: block;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+thead { background: var(--code-bg); }
+th, td {
+  padding: 8px 14px;
+  border-top: 1px solid var(--border-muted);
+  border-right: 1px solid var(--border-muted);
+  text-align: left;
+  vertical-align: top;
+  font-size: 14px;
+}
+th:last-child, td:last-child { border-right: none; }
+th { font-weight: 600; }
+tbody tr:nth-child(even) { background: var(--table-stripe); }
+
+blockquote {
+  border-left: 4px solid var(--quote-border);
+  margin: 0 0 16px;
+  padding: 0 16px;
+  color: var(--muted);
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--border-muted);
+  margin: 32px 0;
+}
+
+h2.toc-heading {
+  background: var(--code-bg);
+  border: 1px solid var(--border-muted);
+  border-bottom: 1px solid var(--border-muted);
+  border-radius: 8px 8px 0 0;
+  padding: 14px 24px 10px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  box-shadow: var(--shadow);
+}
+h2.toc-heading + .toc {
+  background: var(--code-bg);
+  border: 1px solid var(--border-muted);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 8px 24px 16px;
+  margin: 0 0 40px;
+  font-size: 14px;
+  box-shadow: var(--shadow);
+}
+.toc > ul { padding-left: 0; list-style: none; columns: 2; column-gap: 32px; }
+.toc > ul > li { break-inside: avoid; padding-left: 0; margin-top: 8px; }
+.toc > ul > li:first-child { margin-top: 0; }
+.toc ul ul { padding-left: 16px; list-style: none; }
+.toc li { margin-bottom: 2px; }
+.toc a { color: var(--link); }
+
+@media (max-width: 720px) {
+  .toc > ul { columns: 1; }
+}
+
+.footer {
+  margin-top: 64px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-muted);
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+@media print {
+  body { font-size: 11pt; }
+  .page { max-width: none; padding: 0; }
+  pre, table { page-break-inside: avoid; }
+  h1, h2, h3 { page-break-after: avoid; }
+  .toc-wrap { page-break-after: always; }
+  a { color: inherit; text-decoration: none; }
+  .anchor { display: none; }
+}
+</style>
+</head>
+<body>
+<main class="page">
+<div class="meta-banner">
+  <span class="badge draft">Draft</span>
+  <span>Spec — 2026-05-09</span>
+  <span>nischal94/repo-template</span>
+  <span style="margin-left:auto"><a href="2026-05-09-enterprise-ci-template-design.md">View source (.md)</a></span>
+</div>
+<h1 id="enterprise-ci-template-design">Enterprise CI Template Design<a class="anchor" href="#enterprise-ci-template-design" title="Permalink to this section">#</a></h1>
+<ul>
+<li><strong>Status:</strong> Draft v0.3, pending implementation plan</li>
+<li><strong>Date:</strong> 2026-05-09 (v0.1, v0.2, v0.3 same-day revisions)</li>
+<li><strong>Author:</strong> Nischal (<code>@nischal94</code>)</li>
+<li><strong>Scope:</strong> Future repos created on the <code>nischal94</code> GitHub account</li>
+<li><strong>Non-goals:</strong> Retroactive migration of existing repos; multi-org governance; GHEC-specific features</li>
+</ul>
+<h2 class="toc-heading" id="contents">Contents<a class="anchor" href="#contents" title="Permalink to this section">#</a></h2>
+<div class="toc">
+<ul>
+<li><a href="#contents">Contents</a></li>
+<li><a href="#changelog">Changelog</a><ul>
+<li><a href="#v03-2026-05-09">v0.3 — 2026-05-09</a></li>
+<li><a href="#v02-2026-05-09">v0.2 — 2026-05-09</a></li>
+<li><a href="#v01-2026-05-09">v0.1 — 2026-05-09</a></li>
+</ul>
+</li>
+<li><a href="#1-problem">1. Problem</a></li>
+<li><a href="#2-solution-overview-two-layers">2. Solution overview — two layers</a><ul>
+<li><a href="#layer-1-nischal94github-universal-auto-applied">Layer 1 — nischal94/.github (universal, auto-applied)</a></li>
+<li><a href="#layer-2-nischal94repo-template-opt-in-scaffold">Layer 2 — nischal94/repo-template (opt-in scaffold)</a></li>
+<li><a href="#why-two-layers">Why two layers</a></li>
+</ul>
+</li>
+<li><a href="#3-layer-1-github-repo">3. Layer 1 — .github repo</a><ul>
+<li><a href="#31-mandatory-workflows-block-merge-on-every-repo">3.1 Mandatory workflows (block merge on every repo)</a></li>
+<li><a href="#32-release-time-mandatory-workflows-block-the-release-if-they-fail">3.2 Release-time mandatory workflows (block the release if they fail)</a></li>
+<li><a href="#32a-advisory-workflows-run-dont-block">3.2a Advisory workflows (run, don&rsquo;t block)</a></li>
+<li><a href="#33-enforcement-architecture">3.3 Enforcement architecture</a><ul>
+<li><a href="#33a-rulesets-api-as-primary-enforcement-mechanism">3.3a Rulesets API as primary enforcement mechanism</a></li>
+<li><a href="#33b-four-workflows-in-nischal94github">3.3b Four workflows in nischal94/.github</a></li>
+<li><a href="#33c-app-private-key-the-trust-root-question">3.3c App private key — the trust-root question</a></li>
+<li><a href="#33d-race-window-characterization">3.3d Race window characterization</a></li>
+<li><a href="#33e-state-management">3.3e State management</a></li>
+</ul>
+</li>
+<li><a href="#34-drift-audit">3.4 Drift audit</a></li>
+<li><a href="#35-license-allowlist">3.5 License allowlist</a></li>
+<li><a href="#36-universal-hardening-defaults">3.6 Universal hardening defaults</a></li>
+<li><a href="#37-account-level-and-per-repo-settings-one-time-per-repo">3.7 Account-level and per-repo settings (one-time + per-repo)</a></li>
+<li><a href="#38-community-files">3.8 Community files</a></li>
+</ul>
+</li>
+<li><a href="#4-layer-2-repo-template-repo">4. Layer 2 — repo-template repo</a><ul>
+<li><a href="#41-project-skeleton">4.1 Project skeleton</a></li>
+<li><a href="#42-the-makefile-is-not-the-ci-contract">4.2 The Makefile is not the CI contract</a></li>
+<li><a href="#43-auto-detection-with-manifest-escape-hatch">4.3 Auto-detection with manifest escape hatch</a></li>
+<li><a href="#44-v1-language-profiles">4.4 v1 language profiles</a></li>
+<li><a href="#45-coverage-ratchet">4.5 Coverage ratchet</a></li>
+<li><a href="#46-cd-oidc-where-supported-long-lived-tokens-elsewhere-documented-gap">4.6 CD: OIDC where supported, long-lived tokens elsewhere (documented gap)</a></li>
+<li><a href="#47-bootstrap-script">4.7 Bootstrap script</a></li>
+<li><a href="#48-release-automation">4.8 Release automation</a></li>
+</ul>
+</li>
+<li><a href="#5-stated-supply-chain-bar">5. Stated supply-chain bar</a></li>
+<li><a href="#6-coverage-of-the-reference-image">6. Coverage of the reference image</a></li>
+<li><a href="#7-known-limitations-and-accepted-risks">7. Known limitations and accepted risks</a><ul>
+<li><a href="#71-race-window-is-unbounded">7.1 Race window is unbounded</a></li>
+<li><a href="#72-app-private-key-trust-root-has-a-self-approval-caveat">7.2 App private key trust root has a self-approval caveat</a></li>
+<li><a href="#73-migration-to-organization-mode-is-a-substantial-project-not-an-upgrade">7.3 Migration to organization mode is a substantial project, not an upgrade</a></li>
+<li><a href="#74-railway-long-lived-token">7.4 Railway long-lived token</a></li>
+<li><a href="#75-auto-detect-breaks-on-monorepos-without-stacksyml">7.5 Auto-detect breaks on monorepos without stacks.yml</a></li>
+<li><a href="#76-enforcement-requires-the-app-to-stay-installed">7.6 Enforcement requires the App to stay installed</a></li>
+<li><a href="#77-license-check-first-week-friction">7.7 License-check first-week friction</a></li>
+<li><a href="#78-dco-dropped">7.8 DCO dropped</a></li>
+</ul>
+</li>
+<li><a href="#8-out-of-scope-explicit-non-goals">8. Out of scope (explicit non-goals)</a></li>
+<li><a href="#9-implementation-outline-handed-to-writing-plans-next">9. Implementation outline (handed to writing-plans next)</a></li>
+</ul>
+</div>
+<h2 id="changelog">Changelog<a class="anchor" href="#changelog" title="Permalink to this section">#</a></h2>
+<h3 id="v03-2026-05-09">v0.3 — 2026-05-09<a class="anchor" href="#v03-2026-05-09" title="Permalink to this section">#</a></h3>
+<p>Surgical fixes from the third review pass. No architecture changes.</p>
+<ul>
+<li><strong>§3.3c</strong>: named the secret-manager root credential as a new SPOC on
+  solo accounts; mitigation = hardware MFA on the root credential.
+  Reframed the OIDC JSON example as &ldquo;claim values to bind in your
+  trust policy,&rdquo; with provider-specific structure references for AWS /
+  GCP / 1Password.</li>
+<li><strong>§3.3b</strong>: added cross-workflow <code>state-writer</code> concurrency group so
+  enforce-on-poll, drift-audit, and force-sync serialize their state
+  file writes against each other (not just within each workflow).</li>
+<li><strong>§3.3b</strong>: documented the invariant that enforce-on-poll never
+  mutates state for already-configured repos — keeps scaffold-on-poll
+  safe to overlap with the next enforce cycle.</li>
+<li><strong>§3.1</strong>: named the license-check tool (<a href="https://github.com/github/licensed"><code>github/licensed</code></a>)
+  rather than treating &ldquo;license-check.yml&rdquo; as a label.</li>
+<li><strong>§3.7</strong>: added <code>allow_auto_merge: true</code> to the org-level settings
+  list — required for §3.4&rsquo;s drift-PR auto-merge to function.</li>
+<li><strong>§4.5</strong>: clarified coverage regression handling — floor freezes at
+  current value if <code>main</code> drops below; PRs always blocked on delta,
+  never absolute.</li>
+<li><strong>§4.6</strong>: replaced invented Vercel/Fly OIDC action names with honest
+  language. Vercel and Fly OIDC are not yet first-party. Both providers
+  are documented as <strong>using long-lived tokens until OIDC ships
+  natively</strong>, treated as a known gap and re-evaluated quarterly.</li>
+<li><strong>§7.6</strong>: replaced incorrect sub-audit auth (fine-grained PAT
+  reading App-installation state, which doesn&rsquo;t work) with
+  <code>GET /users/nischal94/installations</code> via a fine-grained PAT scoped
+  to the user account.</li>
+<li>Cross-reference fixes: §3.6 → §4.1 (correct location), §3.3c → §7.2.</li>
+<li>Removed process-language leak from §4.6.</li>
+</ul>
+<h3 id="v02-2026-05-09">v0.2 — 2026-05-09<a class="anchor" href="#v02-2026-05-09" title="Permalink to this section">#</a></h3>
+<p>Material revisions in response to two independent review passes:</p>
+<ul>
+<li><strong>§3.3 enforcement model</strong>: replaced event-driven <code>repository.created</code>
+  webhook (which does not fire for user-owned repos) with a polling-based
+  scheduled workflow. App installation tokens minted at job start; no PAT
+  used for cross-repo writes.</li>
+<li><strong>§3.3a rulesets API</strong>: adopted as primary mechanism (vs legacy
+  branch-protection-rules) for cleaner schema and bypass-actor support.
+  Verified against <a href="https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets">GitHub docs</a> — only &ldquo;Required reviewers&rdquo; (team-based) is
+  unavailable on user-owned repos; signed-commits and other rules work.</li>
+<li><strong>§3.3b workflow decomposition</strong>: split into four workflows
+  (<code>enforce-on-poll</code>, <code>scaffold-on-poll</code>, <code>drift-audit</code>, <code>force-sync</code>)
+  rather than three; sync is decoupled from policy enforcement.</li>
+<li><strong>§3.3c App private key</strong>: documented the trust-root question honestly.
+  External secret manager (1Password Connect / AWS KMS) is <em>one</em> option;
+  the alternative is environment-protection-with-required-reviewer on
+  <code>nischal94/.github</code>. Both are explicitly characterized.</li>
+<li><strong>§3.3d race window</strong>: corrected from &ldquo;5-minute worst case&rdquo; to
+  &ldquo;typically 5-30 min, unbounded under load&rdquo; per GitHub&rsquo;s own scheduled
+  workflow caveats. Added optional webhook-receiver fallback for projects
+  that need sub-minute response.</li>
+<li><strong>§3.4 drift audit</strong>: auto-remediation now opens PRs, never direct-pushes.</li>
+<li><strong>§3.5 license-check</strong>: clarified bot bypass via <code>bypass_actors</code> only
+  works for the App&rsquo;s own pushes; documented the Dependabot-specific
+  approach.</li>
+<li><strong>§4.5 coverage ratchet</strong>: resolved floor/cap contradiction. Floor is
+  enforced after 30 days of activity; cap of +2pp/PR applies only after
+  the floor is met.</li>
+<li><strong>§4.6 CD/SLSA</strong>: specified <code>slsa-framework/slsa-github-generator</code> for
+  Build L3, with required <code>slsa-verifier</code> step on consumer side and
+  documented tag-pinning exception (conflicts with general SHA-pin rule).</li>
+<li><strong>§4.4 shell auto-detection</strong>: tightened from &ldquo;any *.sh file present&rdquo;
+  to &ldquo;shell is the primary language OR explicit <code>stacks.yml</code> opt-in.&rdquo;</li>
+<li><strong>§3.6 → §4.x harden-runner</strong>: moved from Layer 1 to Layer 2 since
+  egress allowlists are stack-specific.</li>
+<li><strong>§7 limitations</strong>: rewrote the migration-to-org section honestly.
+  Conversion uninstalls all GitHub Apps, voids OAuth tokens, requires
+  manual Actions re-enablement, and is one-way. No &ldquo;easy upgrade.&rdquo;</li>
+</ul>
+<h3 id="v01-2026-05-09">v0.1 — 2026-05-09<a class="anchor" href="#v01-2026-05-09" title="Permalink to this section">#</a></h3>
+<p>Initial draft. Findings from review (now addressed in v0.2):
+event-webhook misuse on user accounts; SLSA L3 misclaim;
+single-point-of-compromise app key; ambiguous cross-repo token strategy;
+coverage ratchet contradiction; harden-runner egress allowlist scope
+mismatch; shell auto-detection too broad; signed-commits blocking
+Dependabot; silent-direct-push drift remediation.</p>
+<h2 id="1-problem">1. Problem<a class="anchor" href="#1-problem" title="Permalink to this section">#</a></h2>
+<p>There is no consistent, enterprise-grade CI baseline applied to new repos. Each
+new project either inherits an outdated copy of <code>repo-template</code> or starts from
+scratch. The CI checks that exist are not uniformly required by branch
+protection, so checks run but do not block merges. There is no mechanism that
+keeps repos aligned with policy over time.</p>
+<p>The goal is a template system that, on day zero of any new project, produces a
+repo that:</p>
+<ul>
+<li>Passes a stated supply-chain bar (<a href="https://slsa.dev/spec/v1.0/levels">SLSA Level 3</a>, <a href="https://scorecard.dev">OpenSSF Scorecard</a> ≥ 7).</li>
+<li>Auto-detects its stack and runs appropriate CI without per-project wiring.</li>
+<li>Has its branch protection enforced server-side, before any human can push.</li>
+<li>Stays compliant over time via continuous policy auditing.</li>
+</ul>
+<h2 id="2-solution-overview-two-layers">2. Solution overview — two layers<a class="anchor" href="#2-solution-overview-two-layers" title="Permalink to this section">#</a></h2>
+<h3 id="layer-1-nischal94github-universal-auto-applied">Layer 1 — <code>nischal94/.github</code> (universal, auto-applied)<a class="anchor" href="#layer-1-nischal94github-universal-auto-applied" title="Permalink to this section">#</a></h3>
+<p>A repo with the magic name <code>.github</code>. GitHub auto-supplies <em>community files</em>
+(SECURITY.md, CODE_OF_CONDUCT.md, PR/issue templates, CODEOWNERS) from this
+repo to every other repo on the account with no copying. Workflows are <em>not</em>
+auto-supplied — they&rsquo;re stored here as the canonical source and propagated to
+each repo via the GitHub App&rsquo;s sync mechanism on repo creation, with the
+weekly drift audit catching anything that falls behind.</p>
+<p>Owns:</p>
+<ul>
+<li>Canonical universal CI workflows (apply to every repo regardless of stack).</li>
+<li>Default community files (auto-supplied).</li>
+<li>The continuous policy-audit workflow.</li>
+<li>The GitHub App configuration that handles server-side enforcement and
+  workflow sync.</li>
+</ul>
+<h3 id="layer-2-nischal94repo-template-opt-in-scaffold">Layer 2 — <code>nischal94/repo-template</code> (opt-in scaffold)<a class="anchor" href="#layer-2-nischal94repo-template-opt-in-scaffold" title="Permalink to this section">#</a></h3>
+<p>Clicked at <code>gh repo create --template</code>. Owns:</p>
+<ul>
+<li>The project skeleton (README/ARCHITECTURE/RUNBOOK/THREAT_MODEL/CLAUDE.md
+  stubs, lefthook config, devcontainer, Makefile).</li>
+<li>Stack-detected CI workflows (Node, Python, Go, Shell, Docker, SQL, E2E,
+  Docs).</li>
+<li>Stack-detected CD workflows (Vercel, Fly, Railway).</li>
+<li>The bootstrap script for stack scaffolding.</li>
+</ul>
+<h3 id="why-two-layers">Why two layers<a class="anchor" href="#why-two-layers" title="Permalink to this section">#</a></h3>
+<ul>
+<li>One source of truth for universal policy: a fix to <code>gitleaks</code> propagates to
+  every repo on the next push, no PR-per-repo.</li>
+<li>Existing repos benefit from Layer 1 without ever being modified.</li>
+<li>Layer 2 stays opinionated and focused on <em>new</em> projects; it doesn&rsquo;t have to
+  hedge against the diversity of past repos.</li>
+</ul>
+<h2 id="3-layer-1-github-repo">3. Layer 1 — <code>.github</code> repo<a class="anchor" href="#3-layer-1-github-repo" title="Permalink to this section">#</a></h2>
+<h3 id="31-mandatory-workflows-block-merge-on-every-repo">3.1 Mandatory workflows (block merge on every repo)<a class="anchor" href="#31-mandatory-workflows-block-merge-on-every-repo" title="Permalink to this section">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>Workflow</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>gitleaks.yml</code></td>
+<td>Secret scanning on diffs and full history</td>
+</tr>
+<tr>
+<td><code>dependency-review.yml</code></td>
+<td>GitHub-native PR-diff CVE check</td>
+</tr>
+<tr>
+<td><code>osv-scanner.yml</code></td>
+<td>Full lockfile CVE scan via <a href="https://osv.dev">OSV</a></td>
+</tr>
+<tr>
+<td><code>codeql.yml</code></td>
+<td>Per-PR CodeQL (replaces weekly Default Setup)</td>
+</tr>
+<tr>
+<td><code>actionlint.yml</code></td>
+<td>Workflow YAML lint</td>
+</tr>
+<tr>
+<td><code>pin-actions.yml</code></td>
+<td>Fails if any <code>uses:</code> references a tag/branch instead of a SHA</td>
+</tr>
+<tr>
+<td><code>pr-title.yml</code></td>
+<td>Conventional Commits enforcement on PR titles</td>
+</tr>
+<tr>
+<td><code>signed-commits.yml</code></td>
+<td>Requires Verified signature on every commit</td>
+</tr>
+<tr>
+<td><code>license-check.yml</code></td>
+<td>Blocking; allowlist-driven (see §3.5). Uses <a href="https://github.com/github/licensed"><code>github/licensed</code></a> v4 with SPDX expression mode. Per-ecosystem detection mappings live in <code>policies/license-config.yml</code>.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-release-time-mandatory-workflows-block-the-release-if-they-fail">3.2 Release-time mandatory workflows (block the release if they fail)<a class="anchor" href="#32-release-time-mandatory-workflows-block-the-release-if-they-fail" title="Permalink to this section">#</a></h3>
+<p>These do not block PRs (they have no PR trigger), but they block GitHub
+Releases from being published if they fail. Their output is required for
+the stated SLSA L3 / EO 14028 bar.</p>
+<table>
+<thead>
+<tr>
+<th>Workflow</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sbom-on-release.yml</code></td>
+<td>Generates <a href="https://cyclonedx.org">CycloneDX</a> SBOM on every GitHub Release</td>
+</tr>
+<tr>
+<td><code>attest-build-provenance.yml</code></td>
+<td>Generates <a href="https://github.com/actions/attest-build-provenance">SLSA build provenance</a> on every Release artifact</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32a-advisory-workflows-run-dont-block">3.2a Advisory workflows (run, don&rsquo;t block)<a class="anchor" href="#32a-advisory-workflows-run-dont-block" title="Permalink to this section">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>Workflow</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scorecard.yml</code></td>
+<td>Weekly OpenSSF Scorecard, uploads to Security tab</td>
+</tr>
+<tr>
+<td><code>harden-runner.yml</code> (composite)</td>
+<td><code>step-security/harden-runner</code> block-egress wrapper called by every other workflow</td>
+</tr>
+</tbody>
+</table>
+<h3 id="33-enforcement-architecture">3.3 Enforcement architecture<a class="anchor" href="#33-enforcement-architecture" title="Permalink to this section">#</a></h3>
+<p>A custom GitHub App registered at the user account level, installed once
+across all repos. Owns admin-grade actions that PATs cannot safely perform.</p>
+<p><strong>Permissions:</strong> <code>administration: write</code> (rulesets API),
+<code>metadata: read</code>, <code>contents: write</code> (for sync PRs), <code>pull_requests: write</code>,
+<code>issues: write</code> (for drift-audit issues), <code>actions: read</code>.</p>
+<p><strong>Why polling, not webhooks:</strong> GitHub&rsquo;s <code>repository</code> webhook event with
+action <code>created</code> does not fire for user-owned repos — it is documented as
+organization-only. <code>nischal94</code> is a user account (see §7.3 for the rationale
+behind staying a user account). Polling is the only mechanism that works on
+this account shape today.</p>
+<h4 id="33a-rulesets-api-as-primary-enforcement-mechanism">3.3a Rulesets API as primary enforcement mechanism<a class="anchor" href="#33a-rulesets-api-as-primary-enforcement-mechanism" title="Permalink to this section">#</a></h4>
+<p>Branch protection is applied via the <a href="https://docs.github.com/en/rest/repos/rules">rulesets API</a>
+(<code>POST /repos/{owner}/{repo}/rulesets</code>), not the legacy
+<code>branch-protection-rules</code> API. Reasons:</p>
+<ul>
+<li><strong>Bypass actors</strong> are first-class — explicit list of integrations or
+  roles allowed to bypass specific rules. (Note: this is <em>narrower</em> than
+  it sounds — see §3.5 for what bypass-actors actually does and doesn&rsquo;t
+  resolve.)</li>
+<li><strong>Multiple rulesets per repo</strong> can be composed (one for <code>main</code>, another
+  for <code>release/*</code>).</li>
+<li><strong>Cleaner JSON schema</strong> than the legacy API.</li>
+<li><strong>Forward-compatibility</strong> with org-mode is partial — at the rule
+  definition level the schema is the same, but org-mode adds the
+  ability to define one ruleset that targets many repos via patterns.
+  See §7 for the honest migration story.</li>
+</ul>
+<p><strong>Verified user-account compatibility</strong> (against <a href="https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets">GitHub docs</a>):
+the only rule documented as unavailable on user-owned repos is
+&ldquo;Required reviewers&rdquo; (team-based — user accounts have no teams). All
+other rule types (signed-commits, status checks, push restrictions, file
+paths, linear history, deployments, signature verification, restrict
+deletions, restrict force-pushes) work on user-owned repos.</p>
+<p>The canonical ruleset for <code>main</code> includes:
+- <code>required_signatures</code>
+- <code>required_status_checks</code> (the Layer 1 mandatory list from §3.1)
+- <code>pull_request</code> (1 approving review, dismiss stale, require code-owner
+  review)
+- <code>deletion</code> (block branch deletion)
+- <code>non_fast_forward</code> (block force-push)
+- <code>creation</code> (require PR via <code>bypass_actors</code> for the App itself)</p>
+<p>Smoke-tested on a throwaway user-owned repo before declaring the schema
+final.</p>
+<h4 id="33b-four-workflows-in-nischal94github">3.3b Four workflows in <code>nischal94/.github</code><a class="anchor" href="#33b-four-workflows-in-nischal94github" title="Permalink to this section">#</a></h4>
+<table>
+<thead>
+<tr>
+<th>Workflow</th>
+<th>Trigger</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enforce-on-poll.yml</code></td>
+<td><code>*/5 * * * *</code> cron + manual dispatch</td>
+<td>Apply canonical ruleset to new repos</td>
+</tr>
+<tr>
+<td><code>scaffold-on-poll.yml</code></td>
+<td><code>workflow_run</code> after <code>enforce-on-poll</code> succeeds</td>
+<td>Materialize Layer 1 workflows into the new repo via PR</td>
+</tr>
+<tr>
+<td><code>drift-audit.yml</code></td>
+<td>Weekly cron + manual dispatch</td>
+<td>Detect ruleset/workflow drift, open PRs (never direct-push)</td>
+</tr>
+<tr>
+<td><code>force-sync.yml</code></td>
+<td><code>workflow_dispatch</code> only</td>
+<td>Manual escape hatch — re-apply ruleset and re-sync workflows for a specific repo</td>
+</tr>
+</tbody>
+</table>
+<p>Splitting <code>enforce-on-poll</code> from <code>scaffold-on-poll</code> decouples policy
+(ruleset application — security-critical) from file delivery (workflow
+sync — best-effort idempotent). A transient git error during scaffolding
+no longer rolls back ruleset application, and vice versa.</p>
+<p>All four workflows declare:</p>
+<pre><code class="language-yaml">concurrency:
+  group: state-writer        # SHARED across all four workflows
+  cancel-in-progress: false
+permissions:
+  contents: read
+  id-token: write             # for OIDC to the secret manager
+</code></pre>
+<p><code>cancel-in-progress: false</code> is intentional — overlapping runs must
+serialize, never cancel each other (would corrupt state).</p>
+<p><strong>Shared concurrency group is critical.</strong> Each workflow alone using
+<code>group: ${{ github.workflow }}</code> would only serialize <em>within</em> its own
+workflow. With three workflows (<code>enforce-on-poll</code>, <code>drift-audit</code>,
+<code>force-sync</code>) all writing <code>state/configured-repos.json</code>, a manual
+<code>force-sync</code> dispatched mid-<code>drift-audit</code> would race the audit&rsquo;s commit
+and risk state-file corruption. Using a single shared group named
+<code>state-writer</code> is the global lock that makes all state writes serial
+across the entire system.</p>
+<p><code>scaffold-on-poll</code> does NOT write state, so it could in principle have
+its own group — but joining <code>state-writer</code> keeps the system simple
+(at the cost of a small amount of unnecessary serialization, which is
+fine because scaffold runs are infrequent).</p>
+<p><strong>Cross-workflow invariant</strong> (load-bearing): <code>enforce-on-poll</code> must
+NEVER mutate state for repos already present in the state file. This
+keeps <code>scaffold-on-poll</code> (triggered by <code>workflow_run</code> after enforce)
+safe to overlap with the next <code>enforce-on-poll</code> cycle — the next
+enforce sees &ldquo;already configured, skip,&rdquo; and reconciliation that
+genuinely needs to write back to state is the responsibility of
+<code>force-sync</code>, never enforce.</p>
+<h4 id="33c-app-private-key-the-trust-root-question">3.3c App private key — the trust-root question<a class="anchor" href="#33c-app-private-key-the-trust-root-question" title="Permalink to this section">#</a></h4>
+<p>The App&rsquo;s private key is the root of trust for all enforcement. Where
+it lives determines who can compromise the entire system.</p>
+<p>Three placements considered, with their trust roots stated honestly:</p>
+<p><strong>Option 3.3c-A — Repo secret in <code>nischal94/.github</code></strong> (the v0.1 design):
+trust root is &ldquo;anyone who can land a workflow change in <code>nischal94/.github</code>,
+including via a malicious PR using <code>pull_request_target</code>.&rdquo; Rejected.</p>
+<p><strong>Option 3.3c-B — External secret manager (1Password Connect / AWS KMS /
+GCP Secret Manager) pulled at runtime via OIDC</strong>: trust root is
+&ldquo;GitHub&rsquo;s OIDC issuer + the trust policy on the secret manager.&rdquo; The trust
+policy must pin both the repo and the environment.</p>
+<p>The OIDC token claim values to bind in your secret manager&rsquo;s trust
+policy:</p>
+<pre><code>sub: repo:nischal94/.github:environment:prod-app-key
+aud: &lt;provider-specific custom audience, configured in the workflow&gt;
+</code></pre>
+<p><strong>Actual trust-policy structure is provider-specific.</strong> For AWS IAM,
+wrap the claim conditions in <code>Effect</code>/<code>Principal</code>/<code>Condition.StringEquals</code>.
+For GCP Workload Identity Pool, configure attribute mappings on the
+provider. For 1Password Connect, see <a href="https://developer.1password.com/docs/connect/manage-secrets/integrate-with-github-actions">their OIDC integration guide</a>.
+The implementation plan picks one provider; the trust policy is
+authored against that provider&rsquo;s schema.</p>
+<p>The workflow declares <code>environment: prod-app-key</code> to mint a token whose
+OIDC claim includes that environment binding. The environment must require
+<em>manual approval</em> before the deployment runs.</p>
+<p><strong>Recursive-trust caveat (the secret-manager root credential is a new SPOC).</strong>
+OIDC-based access from GitHub to the secret manager removes the App key
+from GitHub repo secrets — a real improvement. But the secret manager
+itself must be authenticated by <em>something</em>: AWS root account credentials,
+GCP project owner login, or the 1Password master password. On a solo
+account these credentials are inevitably held by you alone — they
+<em>are</em> a single point of compromise, just relocated.</p>
+<p>What this design buys is a <strong>harder compromise surface</strong>, not its
+elimination:
+- Before v0.2: &ldquo;push to <code>nischal94/.github</code>&rsquo;s <code>main</code> branch&rdquo; → can read
+  the App key from the repo secret. One step.
+- After v0.2: &ldquo;compromise the GitHub session AND the secret-manager
+  root credentials AND (if hardware-keyed) physical possession of the
+  hardware key&rdquo; → can read the App key. Three independent factors.</p>
+<p><strong>Required mitigation</strong>: hardware MFA on the secret-manager root
+credentials (AWS hardware MFA token / GCP Titan Security Key /
+1Password biometric+device-trust). This converts the recursive trust
+from &ldquo;still a software-only chain&rdquo; to &ldquo;requires physical access at
+the root.&rdquo; Documented in the threat model.</p>
+<p><strong>Honest caveat</strong>: as a solo dev, &ldquo;manual approval by self&rdquo; is a
+self-approval. GitHub&rsquo;s environment-protection feature lets you require
+approval but cannot prevent self-approval on a personal account. So the
+environment gate becomes a &ldquo;click-to-approve&rdquo; speed bump, not a true
+two-person rule. It still buys real value: it converts compromise from
+&ldquo;silent push to main steals the key&rdquo; to &ldquo;attacker must trigger the
+workflow and click the approval button while logged in as you.&rdquo;</p>
+<p><strong>Option 3.3c-C — Repo secret + protected environment + branch protection
+on <code>nischal94/.github</code></strong> (no external manager): trust root is
+&ldquo;push-to-main on <code>nischal94/.github</code>, gated by required PR review +
+required signed commits + required status checks.&rdquo; Solo-dev limitation:
+required-PR-review with self-approval-disabled is not enforceable on
+personal accounts.</p>
+<p><strong>Decision for v0.2</strong>: ship 3.3c-B. The environment+OIDC approach is
+the strongest available on a user account today. The &ldquo;self-approval&rdquo;
+caveat is documented in §7.2 as a known limitation. If you ever convert
+to org mode, replace the environment gate with required-reviewer-not-self
+on the org&rsquo;s <code>.github</code> repo (which orgs <em>can</em> enforce).</p>
+<h4 id="33d-race-window-characterization">3.3d Race window characterization<a class="anchor" href="#33d-race-window-characterization" title="Permalink to this section">#</a></h4>
+<p>GitHub&rsquo;s <a href="https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#schedule">scheduled workflow documentation</a>
+is explicit: cron schedules &ldquo;may be delayed during periods of high load&rdquo;
+and run time &ldquo;is not guaranteed.&rdquo; Community-observed delays of
+15–60 minutes are routine, especially at top-of-hour.</p>
+<p><strong>Honest characterization</strong>:
+- Best case: ~30 seconds (cron fires on time, App runs fast).
+- Typical case: 2–10 minutes.
+- Worst case: 60+ minutes during peak hours.
+- <strong>The race window is unbounded by GitHub&rsquo;s own SLA.</strong></p>
+<p>For solo work, this is acceptable: you do not push secrets to a brand-new
+repo in its first hour. You are still scaffolding.</p>
+<p>For projects that require sub-minute response (e.g., a future product
+where any user-facing repo must be protected on creation), an opt-in
+<strong>webhook receiver</strong> is documented as future work:
+- A small Cloudflare Worker / Fly app receives GitHub repo creation
+  webhooks (which <em>do</em> fire for the App at the user-account level — the
+  App receives them even when the repo isn&rsquo;t org-owned).
+- The Worker fires a <code>repository_dispatch</code> event back to
+  <code>nischal94/.github</code>, triggering <code>enforce-on-poll</code> immediately.
+- Sub-minute response in exchange for one tiny external service.</p>
+<p>This is <strong>not in v1</strong>. Polling is sufficient until you have a project
+that demonstrably needs the tighter window.</p>
+<h4 id="33e-state-management">3.3e State management<a class="anchor" href="#33e-state-management" title="Permalink to this section">#</a></h4>
+<p>A single JSON file at <code>nischal94/.github/state/configured-repos.json</code>,
+committed by the App on each successful enforcement run. Schema:</p>
+<pre><code class="language-json">{
+  &quot;schemaVersion&quot;: 1,
+  &quot;lastSyncAt&quot;: &quot;2026-05-09T12:34:56Z&quot;,
+  &quot;appInstallationId&quot;: 12345678,
+  &quot;repos&quot;: {
+    &quot;owner/repo-name&quot;: {
+      &quot;rulesetId&quot;: 999,
+      &quot;configuredAt&quot;: &quot;2026-05-09T12:34:56Z&quot;,
+      &quot;rulesetVersion&quot;: &quot;v3&quot;,
+      &quot;scaffoldedWorkflowsVersion&quot;: &quot;v3&quot;
+    }
+  }
+}
+</code></pre>
+<p><strong>Authoritative source for &ldquo;what repos exist&rdquo;</strong>: <code>GET /installation/repositories</code>
+(the App&rsquo;s installation manifest), NOT the state file. The state file is
+<em>cache only</em> — used to skip redundant API calls, never to determine policy.</p>
+<p><strong>Failure modes addressed:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Failure mode</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Two <code>*/5</code> runs overlap</td>
+<td><code>concurrency: enforce-on-poll, cancel-in-progress: false</code> serializes them</td>
+</tr>
+<tr>
+<td>Repo deleted then recreated with same name</td>
+<td>State file entry stale; reconciliation against <code>GET /installation/repositories</code> detects mismatched <code>rulesetId</code>, re-applies</td>
+</tr>
+<tr>
+<td>Repo transferred <em>out</em></td>
+<td>Detected as missing from installation manifest; entry archived (not deleted, for audit)</td>
+</tr>
+<tr>
+<td>Repo transferred <em>in</em></td>
+<td>Detected as new; ruleset applied via merge (PUT semantics) on top of any existing rules</td>
+</tr>
+<tr>
+<td>State file corrupted</td>
+<td>App fails loudly with <code>policy: state-file-corrupt</code> issue; recovery via <code>force-sync</code> against full installation</td>
+</tr>
+<tr>
+<td>App uninstalled and reinstalled</td>
+<td>New installation ID detected; existing rulesets retain old <code>actor_id</code> references; <code>force-sync</code> rewrites bypass-actors</td>
+</tr>
+<tr>
+<td>Concurrent state file commit conflicts</td>
+<td>Run uses <code>git pull --rebase</code> before commit; on conflict, retries with backoff; after 3 failures, fails loudly</td>
+</tr>
+</tbody>
+</table>
+<h3 id="34-drift-audit">3.4 Drift audit<a class="anchor" href="#34-drift-audit" title="Permalink to this section">#</a></h3>
+<p><code>drift-audit.yml</code>, scheduled <code>0 9 * * 0</code> (Sundays 09:00 UTC), plus
+manual dispatch.</p>
+<p>For every repo in the App&rsquo;s installation manifest, the audit:</p>
+<ol>
+<li>Fetches the active ruleset on <code>main</code>.</li>
+<li>Compares to the canonical ruleset definition in
+   <code>policies/canonical-ruleset.json</code>.</li>
+<li>Fetches the Layer 1 workflow files in <code>.github/workflows/</code>; verifies
+   each matches the canonical version (by SHA) in
+   <code>nischal94/.github/.github/workflows/</code>.</li>
+<li>For <em>recognized</em> drifts (renamed required check, reformatted workflow,
+   trivially-safe added step) → opens an auto-mergeable PR against
+   <code>main</code> of the affected repo with the canonical content. <strong>Never
+   direct-pushes.</strong> PR auto-merges when the repo&rsquo;s own checks pass;
+   otherwise sits open for human review.</li>
+<li>For <em>unrecognized</em> drifts → updates a single rolling issue per repo
+   titled <code>policy: drift detected on main</code>. Severity tiered:
+   - <strong>Critical</strong> (missing required check, protection disabled, push
+     allowed without review): immediate notification via dispatch to
+     <code>nischal94/.github</code> issues.
+   - <strong>Major</strong> (advisory check missing, workflow signature changed):
+     batched in the weekly issue.
+   - <strong>Minor</strong> (cosmetic, version bump available): listed only.</li>
+<li>Auto-closes the rolling issue when its checklist is empty.</li>
+</ol>
+<p><strong>Why auto-PR not auto-push</strong>: a direct push to <code>main</code> from privileged
+automation is a silent privileged write path. If the canonical policy
+itself has a bug, it propagates instantly to every repo without review.
+PRs preserve the audit trail and let the repo&rsquo;s own checks gate the
+remediation. The &ldquo;auto-merge when checks pass&rdquo; behavior keeps the
+ergonomics close to direct-push for the common case.</p>
+<h3 id="35-license-allowlist">3.5 License allowlist<a class="anchor" href="#35-license-allowlist" title="Permalink to this section">#</a></h3>
+<p>Default allowed licenses (no first-PR friction for any sane dep):</p>
+<pre><code>MIT
+Apache-2.0
+BSD-2-Clause
+BSD-3-Clause
+ISC
+0BSD
+Unlicense
+MPL-2.0
+CC0-1.0
+</code></pre>
+<p><strong>Override mechanism:</strong> A repo can ship <code>LICENSE-OVERRIDE.md</code> with entries of
+the form <code>&lt;package&gt;@&lt;version&gt;: &lt;real-license&gt; — &lt;reason&gt;</code>. The check reads it.
+Provides audit trail; prevents silent &ldquo;just allowlist everything&rdquo; drift.</p>
+<p><strong>Blocking semantics:</strong> copyleft (GPL family, AGPL) blocks merge always.
+Unknown licenses block until either the allowlist or <code>LICENSE-OVERRIDE.md</code>
+covers them.</p>
+<p><strong>Bot interaction with required-signed-commits and required-status-checks</strong>:</p>
+<p>The naive plan (&ldquo;add Dependabot to <code>bypass_actors</code> to let it skip
+signed-commits&rdquo;) does NOT work. <code>bypass_actors</code> with <code>actor_type: Integration</code>
+only bypasses rules for pushes by <em>that App&rsquo;s installation token</em>.
+Dependabot pushes as <code>dependabot[bot]</code> (its own App, different installation),
+so adding &ldquo;Dependabot&rdquo; to <em>this</em> App&rsquo;s bypass list is a no-op.</p>
+<p>The actual mechanisms:</p>
+<table>
+<thead>
+<tr>
+<th>Bot</th>
+<th>Signed commits</th>
+<th>Status checks</th>
+<th>Approach</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Dependabot</td>
+<td>✅ already signed by GitHub web-flow key</td>
+<td>❌ runs as <code>dependabot[bot]</code>, status checks apply normally</td>
+<td>Let PRs go through normal flow; auto-approve via Dependabot&rsquo;s allow-list config</td>
+</tr>
+<tr>
+<td>Renovate</td>
+<td>✅ if configured to sign</td>
+<td>❌ same as Dependabot</td>
+<td>Same</td>
+</tr>
+<tr>
+<td>The custom App itself</td>
+<td>Configurable — sign commits when authoring PRs</td>
+<td>Bypass via <code>actor_type: Integration, actor_id: &lt;our-app-installation-id&gt;</code></td>
+<td>Bypass works because the App pushes as itself</td>
+</tr>
+<tr>
+<td>Squash-merge bot (built-in)</td>
+<td>✅ GitHub auto-signs squash commits</td>
+<td>n/a</td>
+<td>No special handling needed</td>
+</tr>
+<tr>
+<td>Manual web edits</td>
+<td>✅ GitHub auto-signs web-flow commits</td>
+<td>n/a</td>
+<td>No special handling needed</td>
+</tr>
+</tbody>
+</table>
+<p>So in practice, signed-commits is only an obstacle for <em>unsigned local
+commits pushed via <code>git push</code></em>. Dependabot, Renovate, web edits, and
+squash-merges all produce GitHub-signed commits automatically.</p>
+<h3 id="36-universal-hardening-defaults">3.6 Universal hardening defaults<a class="anchor" href="#36-universal-hardening-defaults" title="Permalink to this section">#</a></h3>
+<p>Every workflow in Layer 1 declares:</p>
+<pre><code class="language-yaml">permissions:
+  contents: read           # baseline; broader perms requested per-job
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+</code></pre>
+<p><strong><code>step-security/harden-runner</code> placement</strong>: in <code>audit</code> mode for Layer 1
+workflows, in <code>block</code> mode with stack-specific allowlists for Layer 2
+workflows. Reasoning: Layer 1 workflows are universal (e.g., <code>gitleaks</code>
+runs on every repo regardless of stack), so a single allowlist would
+either include every package registry under the sun (defeating egress
+blocking) or break stack-specific jobs the first time they touch
+PyPI/npm/proxy.golang.org. <code>audit</code> mode in Layer 1 still produces the
+egress report — useful signal — without false-positive failures. The
+real <code>block</code> mode lives next to the stack-aware allowlist in Layer 2&rsquo;s
+<code>.github/scripts/ci-&lt;stack&gt;.sh</code> (see §4.1 for the file layout, §4.4 for
+the per-profile contents).</p>
+<h3 id="37-account-level-and-per-repo-settings-one-time-per-repo">3.7 Account-level and per-repo settings (one-time + per-repo)<a class="anchor" href="#37-account-level-and-per-repo-settings-one-time-per-repo" title="Permalink to this section">#</a></h3>
+<p>Set via the GitHub App on the user account once, and per-repo on each
+<code>enforce-on-poll</code> cycle:</p>
+<p><strong>Account-level (one-time):</strong>
+- <code>secret_scanning_push_protection</code>: enabled (rejects pushes containing
+  secrets at the remote, before they land).
+- Default <code>actions.permissions</code>: <code>selected</code> with allowlist of pinned upstream
+  actions.
+- Default workflow permissions: read-only.</p>
+<p><strong>Per-repo (set by App&rsquo;s enforcement routine):</strong>
+- <code>allow_auto_merge: true</code> — required for §3.4&rsquo;s drift-PR auto-merge
+  to function. Without this setting, drift PRs would sit open
+  indefinitely instead of merging when checks pass.
+- <code>allow_squash_merge: true</code>, <code>allow_merge_commit: false</code>,
+  <code>allow_rebase_merge: false</code> — squash-only merge policy (consistent
+  Conventional Commit history on <code>main</code>).
+- <code>delete_branch_on_merge: true</code> — automatic feature-branch cleanup.
+- <code>web_commit_signoff_required: false</code> (we use Conventional Commits
+  + signed-commits, not DCO sign-off — see §7.8).</p>
+<h3 id="38-community-files">3.8 Community files<a class="anchor" href="#38-community-files" title="Permalink to this section">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SECURITY.md</code></td>
+<td>Disclosure policy and contact</td>
+</tr>
+<tr>
+<td><code>CODE_OF_CONDUCT.md</code></td>
+<td>Contributor Covenant 2.1</td>
+</tr>
+<tr>
+<td><code>CODEOWNERS</code></td>
+<td><code>* @nischal94</code></td>
+</tr>
+<tr>
+<td><code>dependabot.yml</code></td>
+<td>npm + pip + go modules + actions + docker, weekly, grouped</td>
+</tr>
+<tr>
+<td><code>PULL_REQUEST_TEMPLATE.md</code></td>
+<td>Required sections checklist</td>
+</tr>
+<tr>
+<td><code>ISSUE_TEMPLATE/</code></td>
+<td>bug, feature, security</td>
+</tr>
+<tr>
+<td><code>FUNDING.yml</code></td>
+<td>Empty stub</td>
+</tr>
+</tbody>
+</table>
+<h2 id="4-layer-2-repo-template-repo">4. Layer 2 — <code>repo-template</code> repo<a class="anchor" href="#4-layer-2-repo-template-repo" title="Permalink to this section">#</a></h2>
+<h3 id="41-project-skeleton">4.1 Project skeleton<a class="anchor" href="#41-project-skeleton" title="Permalink to this section">#</a></h3>
+<pre><code>.devcontainer/                 # ubuntu base + common toolchains
+.github/
+  scripts/
+    ci-node.sh                 # stack-specific CI entry points
+    ci-python.sh
+    ci-go.sh
+    ci-shell.sh
+    ci-docker.sh
+    ci-sql.sh
+    ci-e2e.sh
+    ci-docs.sh
+    cd-deploy.sh
+    cd-smoke.sh
+  smoke.yml                    # routes to hit post-deploy
+  stacks.yml                   # OPTIONAL manifest (see §4.3)
+  workflows/                   # see §4.4
+docs/
+  ARCHITECTURE.md
+  RUNBOOK.md
+  THREAT_MODEL.md
+.editorconfig
+.gitattributes
+.gitignore
+.nvmrc / .python-version / .go-version  # tool-version files
+.tool-versions                 # asdf
+CHANGELOG.md                   # Keep-a-Changelog
+CLAUDE.md                      # Claude Code conventions
+LICENSE                        # MIT default
+LICENSE-OVERRIDE.md            # license-check override file (empty by default)
+Makefile                       # developer-facing wrapper, NOT the CI contract
+README.md                      # required-sections template
+commitlint.config.js
+lefthook.yml                   # local pre-commit / pre-push hooks
+release-please-config.json     # opt-in semver releases
+release-please-manifest.json
+scripts/
+  bootstrap.sh                 # one-time, post-creation scaffolding
+</code></pre>
+<h3 id="42-the-makefile-is-not-the-ci-contract">4.2 The Makefile is <em>not</em> the CI contract<a class="anchor" href="#42-the-makefile-is-not-the-ci-contract" title="Permalink to this section">#</a></h3>
+<p>CI workflows call stack-specific scripts in <code>.github/scripts/</code>, not Make
+targets. Reasoning: <code>make build</code> is meaningless for Shell/SQL/Docs and
+ambiguous for Python (build wheel? install deps? mypy?). When the contract is
+&ldquo;every project defines <code>make build</code>,&rdquo; some projects ship a no-op and CI
+reports green when nothing actually ran.</p>
+<p>The Makefile stays as a developer convenience wrapper for local commands. CI
+ignores it.</p>
+<h3 id="43-auto-detection-with-manifest-escape-hatch">4.3 Auto-detection with manifest escape hatch<a class="anchor" href="#43-auto-detection-with-manifest-escape-hatch" title="Permalink to this section">#</a></h3>
+<p><strong>Default (auto-detect):</strong> Each workflow&rsquo;s first step checks for a marker
+file. If present, the workflow runs. If not, the workflow exits cleanly.</p>
+<table>
+<thead>
+<tr>
+<th>Workflow</th>
+<th>Marker file(s)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ci-node.yml</code></td>
+<td><code>package.json</code></td>
+</tr>
+<tr>
+<td><code>ci-python.yml</code></td>
+<td><code>pyproject.toml</code> or <code>requirements*.txt</code></td>
+</tr>
+<tr>
+<td><code>ci-go.yml</code></td>
+<td><code>go.mod</code></td>
+</tr>
+<tr>
+<td><code>ci-shell.yml</code></td>
+<td>shell is the <em>primary</em> language (<code>scripts/</code>-only repo, or <code>stacks.yml</code> opt-in); not triggered by ambient <code>*.sh</code> files in Node/Python/Go projects</td>
+</tr>
+<tr>
+<td><code>ci-docker.yml</code></td>
+<td><code>Dockerfile</code> or <code>compose.yml</code></td>
+</tr>
+<tr>
+<td><code>ci-sql.yml</code></td>
+<td><code>migrations/</code> or <code>*.sql</code></td>
+</tr>
+<tr>
+<td><code>ci-e2e.yml</code></td>
+<td><code>playwright.config.*</code> or <code>cypress.config.*</code></td>
+</tr>
+<tr>
+<td><code>ci-docs.yml</code></td>
+<td><code>mkdocs.yml</code>, <code>docusaurus.config.*</code>, or root <code>docs/</code></td>
+</tr>
+<tr>
+<td><code>cd-deploy.yml</code></td>
+<td><code>vercel.json</code> or <code>fly.toml</code> or <code>railway.toml</code></td>
+</tr>
+<tr>
+<td><code>cd-smoke.yml</code></td>
+<td>runs after <code>cd-deploy.yml</code> succeeds</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Override (<code>.github/stacks.yml</code>):</strong> When auto-detection produces wrong
+results — monorepos, vendored deps in <code>third_party/</code>, package.json present
+only as a tooling config — the manifest declares explicit <code>{stack: path}</code>
+mappings. When <code>stacks.yml</code> exists, it wins; auto-detection is suppressed for
+the stacks it covers.</p>
+<pre><code class="language-yaml"># .github/stacks.yml example
+stacks:
+  - kind: node
+    path: services/web
+  - kind: python
+    path: services/api
+  - kind: go
+    path: services/edge
+ignore:
+  - third_party/
+  - examples/
+</code></pre>
+<h3 id="44-v1-language-profiles">4.4 v1 language profiles<a class="anchor" href="#44-v1-language-profiles" title="Permalink to this section">#</a></h3>
+<p>Eight profiles ship in v1: <strong>Node, Python, Go, Shell, Docker, SQL, E2E, Docs.</strong></p>
+<p>Skipped in v1: Rust (no current project to validate against), IaC (tool
+choice not yet made), Extension (Manifest V3 timeline still moving). Easy to
+add when first real project of that kind starts.</p>
+<p>Each profile workflow:
+- Detects via §4.3 mechanism.
+- Calls <code>step-security/harden-runner</code>.
+- Declares minimum-needed <code>permissions:</code> block.
+- Declares concurrency cancellation.
+- Calls <code>.github/scripts/ci-&lt;stack&gt;.sh</code> for the actual work.
+- Default artifact retention: 14 days. Compliance artifacts (SBOM,
+  provenance): 365 days.</p>
+<h3 id="45-coverage-ratchet">4.5 Coverage ratchet<a class="anchor" href="#45-coverage-ratchet" title="Permalink to this section">#</a></h3>
+<p>Per-repo, per-stack. Two phases:</p>
+<p><strong>Phase 1 — onboarding (first 30 days OR until floor met, whichever
+comes first):</strong> No upper cap on coverage increases. PRs can land
+arbitrary coverage jumps. The repo is ratcheting UP toward the floor.
+Regressions of more than -1pp still block merge.</p>
+<p><strong>Phase 2 — steady state (after floor met):</strong> Floor is 60% line
+coverage. PRs that would drop coverage below the floor block merge.
+PRs that would <em>raise</em> coverage by more than +2pp still merge — the
++2pp/PR cap was originally proposed to prevent flake-induced gridlock,
+but on reflection it would also block a single PR that legitimately
+adds a large new well-tested module. Replaced with: PRs can ratchet
+up freely; flake protection comes from running tests with
+<code>--retry=2</code> rather than from a per-PR cap.</p>
+<p><strong>Stored state:</strong> <code>.github/coverage-baseline.json</code> updated atomically
+by the <code>ci-node.yml</code> / <code>ci-python.yml</code> / <code>ci-go.yml</code> workflows. Tracks
+current floor, current <code>main</code> coverage, and phase.</p>
+<p><strong>Why these specific numbers:</strong> 60% is industry baseline for
+&ldquo;the project takes testing seriously.&rdquo; 30 days is enough time to
+retrofit tests on a greenfield project. Both are configurable per-repo
+in <code>.github/coverage-config.yml</code> if you have a reason to deviate.</p>
+<p><strong>Regression semantics under flake.</strong> If <code>main</code> coverage drops below
+floor after a flake or merge-commit measurement issue, the floor
+<em>freezes at the new value</em> until the project recovers, then re-ratchets.
+PRs are always blocked on <strong>delta</strong> (PR-introduced regression of more
+than 1 percentage point), not on absolute floor compliance once steady
+state is broken. This avoids the trap where a single flake permanently
+blocks every subsequent PR. Recovery rule: when <code>main</code> re-crosses the
+original floor, the floor un-freezes and resumes its original value.</p>
+<h3 id="46-cd-oidc-where-supported-long-lived-tokens-elsewhere-documented-gap">4.6 CD: OIDC where supported, long-lived tokens elsewhere (documented gap)<a class="anchor" href="#46-cd-oidc-where-supported-long-lived-tokens-elsewhere-documented-gap" title="Permalink to this section">#</a></h3>
+<p>The OIDC preference applies <em>whenever <code>cd-deploy.yml</code> runs</em> (i.e. when
+the deploy-target marker file is present). Repos with no CD don&rsquo;t need
+deploy auth configured at all.</p>
+<p><code>cd-deploy.yml</code> uses <a href="https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect">OpenID Connect</a>
+where the deploy provider supports it natively. As of 2026-05, the
+provider OIDC landscape is <strong>uneven</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>OIDC status</th>
+<th>Mechanism in <code>cd-deploy.yml</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AWS</td>
+<td>✅ Native</td>
+<td><code>aws-actions/configure-aws-credentials@v4</code> with OIDC role</td>
+</tr>
+<tr>
+<td>GCP</td>
+<td>✅ Native</td>
+<td><code>google-github-actions/auth@v2</code> with Workload Identity Federation</td>
+</tr>
+<tr>
+<td>Azure</td>
+<td>✅ Native</td>
+<td><code>azure/login@v2</code> with OIDC subject</td>
+</tr>
+<tr>
+<td>Cloudflare</td>
+<td>✅ Native</td>
+<td><code>cloudflare/wrangler-action@v3</code> (uses scoped API tokens, OIDC support being rolled out)</td>
+</tr>
+<tr>
+<td><strong>Vercel</strong></td>
+<td>❌ <strong>No first-party OIDC action</strong> as of 2026-05</td>
+<td>Uses Vercel CLI with project-scoped token from <code>VERCEL_TOKEN</code> repo secret. Documented as a gap.</td>
+</tr>
+<tr>
+<td><strong>Fly.io</strong></td>
+<td>❌ <strong>OIDC integration incomplete</strong> as of 2026-05 (macaroon-based deploy tokens, no <code>flyctl --oidc</code> subcommand)</td>
+<td>Uses <code>superfly/flyctl-actions/setup-flyctl@master</code> with <code>FLY_API_TOKEN</code> repo secret. Documented as a gap.</td>
+</tr>
+<tr>
+<td>Railway</td>
+<td>❌ No OIDC support</td>
+<td><code>RAILWAY_TOKEN</code> repo secret; documented as a gap.</td>
+</tr>
+<tr>
+<td>Render</td>
+<td>❌ No OIDC support</td>
+<td>Render deploy hook URL stored in repo secret; documented as a gap.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Documented-gap policy for Vercel / Fly / Railway / Render:</strong></p>
+<p>These providers are popular for solo / small-team products and dropping
+them entirely would push every project toward AWS-shaped infrastructure
+that&rsquo;s overkill for most use cases. So they&rsquo;re allowed in v1 with these
+explicit guardrails:</p>
+<ol>
+<li>The repo&rsquo;s <code>THREAT_MODEL.md</code> lists each long-lived deploy token as a
+   &ldquo;credentials-at-rest&rdquo; risk with the line: <em>&ldquo;Compromise of GitHub
+   repo secrets discloses the deploy token; recovery requires rotating
+   the token and re-deploying.&rdquo;</em></li>
+<li>Each token is <strong>project-scoped</strong> (not account-scoped) at the
+   provider — so a leaked Vercel token can only redeploy that one
+   project, not exfiltrate other projects&rsquo; secrets or deploy
+   destructive payloads to siblings.</li>
+<li>Tokens are <strong>rotated quarterly</strong> via a scheduled workflow that
+   opens an issue reminding to rotate. Rotation is manual today;
+   automated when the provider ships an API for it.</li>
+<li>The provider&rsquo;s OIDC status is <strong>re-evaluated quarterly</strong>. When any
+   provider in the gap list ships first-party OIDC, that repo&rsquo;s CD
+   migrates to OIDC in a single PR.</li>
+</ol>
+<p>This is honest &ldquo;we&rsquo;ll get there when the provider gets there&rdquo;
+documentation, not pretending OIDC works when it doesn&rsquo;t.</p>
+<p><strong>SLSA L3 build provenance is NOT affected by this gap.</strong> Build
+attestation lives in the <code>release.yml</code> workflow (using
+<code>slsa-github-generator</code> as documented below) and runs <em>before</em> deploy.
+A compromised deploy token can re-deploy an old artifact, but cannot
+forge build provenance for a new artifact — the provenance chain stays
+intact.</p>
+<p><strong>SLSA Build L3 via <code>slsa-github-generator</code>:</strong> the
+<a href="https://github.com/slsa-framework/slsa-github-generator"><code>slsa-framework/slsa-github-generator</code></a>
+reusable workflow is what actually delivers SLSA Build L3 on
+GitHub-hosted runners. <code>actions/attest-build-provenance</code> alone produces
+provenance but does not satisfy L3&rsquo;s isolation requirements;
+<code>slsa-github-generator</code> runs the build in a SLSA-compliant isolated
+runner and produces the in-toto attestation.</p>
+<p><strong>Two implementation caveats</strong> that must be stated explicitly:</p>
+<ol>
+<li>
+<p><strong>Verifier is required to close the loop.</strong> Generated-but-unverified
+   provenance is L2-equivalent. Any consumer of release artifacts
+   (the deploy step, the user pulling a binary, an automated
+   integration test) must run <a href="https://github.com/slsa-framework/slsa-verifier"><code>slsa-verifier</code></a>
+   before trusting the artifact. The release pipeline ships
+   <code>slsa-verifier</code> invocations in <code>cd-deploy.yml</code> and documents the
+   verification command in <code>RELEASE.md</code> for downstream consumers.</p>
+</li>
+<li>
+<p><strong>Tag-pinning exception.</strong> The general supply-chain rule (§3.1&rsquo;s
+   <code>pin-actions</code>) requires every <code>uses:</code> to reference a SHA, not a
+   tag. <code>slsa-github-generator</code> is the documented exception: SLSA
+   requires consumers pin to a <em>tag</em> (<code>@v2.0.0</code>) so the generator&rsquo;s
+   own provenance subject can be verified. The <code>pin-actions.yml</code>
+   workflow&rsquo;s allowlist explicitly covers <code>slsa-framework/*</code>. This
+   tradeoff is documented in the threat model.</p>
+</li>
+</ol>
+<p>The &ldquo;Verifies app builds in CI&rdquo; row from the reference CI table in §6
+is satisfied by the generator&rsquo;s build step; provenance attestation is
+the additional artifact produced alongside the build output.</p>
+<h3 id="47-bootstrap-script">4.7 Bootstrap script<a class="anchor" href="#47-bootstrap-script" title="Permalink to this section">#</a></h3>
+<p><code>scripts/bootstrap.sh</code> runs <em>once</em> after <code>gh repo create --template</code>. Scope is
+<strong>stack scaffolding only</strong> — branch protection is no longer its
+responsibility (the GitHub App&rsquo;s <code>enforce-on-poll.yml</code> workflow handles that
+on the next poll cycle, typically within 5-30 minutes; see §3.3d).</p>
+<p>Steps:
+1. Prompt for project name, license, primary language.
+2. Remove unused language profile workflows from <code>.github/workflows/</code> (purely
+   cosmetic; auto-detect handles it either way).
+3. Initialize toolchain (<code>npm init -y</code> / <code>uv init</code> / <code>go mod init</code>).
+4. Wire developer-facing Makefile targets to language-appropriate commands.
+5. Write seed <code>LICENSE-OVERRIDE.md</code>, <code>coverage-baseline.json</code>, <code>smoke.yml</code>.
+6. Push initial commit to <code>main</code> (which is already protected by the App).
+7. Open the bootstrap PR — first CI run gates the setup itself.</p>
+<h3 id="48-release-automation">4.8 Release automation<a class="anchor" href="#48-release-automation" title="Permalink to this section">#</a></h3>
+<p><code>release-please.yml</code> runs on push to <code>main</code>. Detects Conventional Commits,
+maintains a release PR, cuts GitHub Releases on merge of the release PR.
+Triggers <code>sbom-on-release.yml</code> and <code>attest-build-provenance.yml</code>.</p>
+<h2 id="5-stated-supply-chain-bar">5. Stated supply-chain bar<a class="anchor" href="#5-stated-supply-chain-bar" title="Permalink to this section">#</a></h2>
+<p>The template, on day one of a new repo, is designed to satisfy:</p>
+<table>
+<thead>
+<tr>
+<th>Standard</th>
+<th>Target</th>
+<th>Mechanism</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://slsa.dev/spec/v1.0/levels">SLSA</a></td>
+<td>Level 3</td>
+<td>OIDC + provenance attestation + isolated builds + signed releases</td>
+</tr>
+<tr>
+<td><a href="https://scorecard.dev">OpenSSF Scorecard</a></td>
+<td>≥ 7</td>
+<td>Pinned actions, signed commits, branch protection, CodeQL, dependency review, fuzzing-aware (deferred), license check</td>
+</tr>
+<tr>
+<td><a href="https://www.whitehouse.gov/briefing-room/presidential-actions/2021/05/12/executive-order-on-improving-the-nations-cybersecurity/">US EO 14028</a></td>
+<td>SBOM provided</td>
+<td>CycloneDX SBOM on every release</td>
+</tr>
+</tbody>
+</table>
+<p>These are <em>measurable</em> targets. The audit workflow surfaces score regressions.</p>
+<h2 id="6-coverage-of-the-reference-image">6. Coverage of the reference image<a class="anchor" href="#6-coverage-of-the-reference-image" title="Permalink to this section">#</a></h2>
+<p>Every row from the reference CI table the user provided maps into this
+design:</p>
+<table>
+<thead>
+<tr>
+<th>Image row</th>
+<th>Where it lives</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Local: lint, tsc, npm test, test:coverage, test:sql, test:e2e</td>
+<td>Layer 2 — <code>lefthook.yml</code> pre-push hooks</td>
+</tr>
+<tr>
+<td>CI: Lint &amp; Typecheck</td>
+<td><code>ci-node.yml</code></td>
+</tr>
+<tr>
+<td>CI: Unit Tests</td>
+<td><code>ci-node.yml</code></td>
+</tr>
+<tr>
+<td>CI: Coverage Report</td>
+<td><code>ci-node.yml</code> (with ratchet, §4.5)</td>
+</tr>
+<tr>
+<td>CI: Drizzle Migration Check</td>
+<td><code>ci-sql.yml</code> (auto-detected via <code>migrations/</code> + <code>drizzle.config.*</code>)</td>
+</tr>
+<tr>
+<td>CI: pg-tap SQL Tests</td>
+<td><code>ci-sql.yml</code> (ephemeral Postgres, <code>pg_prove</code>)</td>
+</tr>
+<tr>
+<td>CI: Next Build</td>
+<td><code>ci-node.yml</code> (stack script handles <code>next build</code> if detected)</td>
+</tr>
+<tr>
+<td>CI: Playwright E2E</td>
+<td><code>ci-e2e.yml</code></td>
+</tr>
+<tr>
+<td>CI / Security: npm Audit</td>
+<td><strong>Removed.</strong> Redundant with <code>dependency-review</code> + <code>osv-scanner</code> in Layer 1</td>
+</tr>
+<tr>
+<td>CI / Security: Gitleaks</td>
+<td>Layer 1 <code>gitleaks.yml</code></td>
+</tr>
+<tr>
+<td>Post-CI/CD: Vercel Deploy</td>
+<td><code>cd-deploy.yml</code> (OIDC, no <code>VERCEL_TOKEN</code>)</td>
+</tr>
+<tr>
+<td>Post-CI/CD: Vercel Preview Comments</td>
+<td>Same workflow</td>
+</tr>
+<tr>
+<td>Advisory: Claude PR Review</td>
+<td>Layer 1 <code>claude.yml</code></td>
+</tr>
+<tr>
+<td>Advisory: Changelog</td>
+<td>Layer 2 <code>release-please.yml</code></td>
+</tr>
+<tr>
+<td>Advisory / Future: CodeRabbit Review</td>
+<td>Layer 1, opt-in via <code>.coderabbit.yaml</code></td>
+</tr>
+<tr>
+<td>Post-CI/CD / Future: Preview Smoke Check</td>
+<td><code>cd-smoke.yml</code></td>
+</tr>
+<tr>
+<td>CI / Future: Supabase Integration Tests</td>
+<td><code>ci-sql.yml</code> extension via <code>supabase/config.toml</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="7-known-limitations-and-accepted-risks">7. Known limitations and accepted risks<a class="anchor" href="#7-known-limitations-and-accepted-risks" title="Permalink to this section">#</a></h2>
+<h3 id="71-race-window-is-unbounded">7.1 Race window is unbounded<a class="anchor" href="#71-race-window-is-unbounded" title="Permalink to this section">#</a></h3>
+<p>Per §3.3d: GitHub&rsquo;s scheduled workflow SLA is &ldquo;best-effort, not
+guaranteed.&rdquo; Race window between repo creation and ruleset application
+is typically 5-30 min, occasionally 60+ min during peak hours. For solo
+work this is acceptable (you don&rsquo;t push secrets to a brand-new repo in
+its first hour). For projects requiring sub-minute response, the opt-in
+webhook receiver path is documented as future work in §3.3d.</p>
+<h3 id="72-app-private-key-trust-root-has-a-self-approval-caveat">7.2 App private key trust root has a self-approval caveat<a class="anchor" href="#72-app-private-key-trust-root-has-a-self-approval-caveat" title="Permalink to this section">#</a></h3>
+<p>Per §3.3c: the environment-protection-with-required-reviewer pattern
+mitigates &ldquo;compromise of <code>.github/main</code> push access&rdquo; but cannot enforce
+two-person-rule on a personal account (you can self-approve your own
+deployments). Treat the environment gate as a click-to-approve speed
+bump, not a true authorization. If you ever convert to org mode, this
+limitation goes away (orgs can require non-self approvers).</p>
+<h3 id="73-migration-to-organization-mode-is-a-substantial-project-not-an-upgrade">7.3 Migration to organization mode is a substantial project, not an upgrade<a class="anchor" href="#73-migration-to-organization-mode-is-a-substantial-project-not-an-upgrade" title="Permalink to this section">#</a></h3>
+<p>Per <a href="https://docs.github.com/en/account-and-profile/reference/personal-account-reference">GitHub&rsquo;s documented side effects</a>
+of converting a user account to an organization:</p>
+<ul>
+<li>&ldquo;Any GitHub Apps installed on the converted personal account will be
+  uninstalled.&rdquo; → The custom enforcement App must be re-registered and
+  re-installed; the new installation has a different ID, which voids
+  every <code>actor_id: &lt;integration_id&gt;</code> reference in existing rulesets
+  across all repos. Every ruleset must be rewritten.</li>
+<li>&ldquo;SSH keys, OAuth tokens, job profile, reactions, and associated user
+  information will not be transferred.&rdquo; → All PATs regenerated, all
+  SSH keys re-uploaded, all OAuth integrations re-authorized.</li>
+<li>&ldquo;GitHub Actions requires manual re-enablement.&rdquo; → Every repo&rsquo;s
+  Actions tab must be manually re-enabled.</li>
+<li>&ldquo;Any commits made with the converted personal account will no longer
+  be linked to that account.&rdquo; → Your contribution graph for past commits
+  shows them as unattributed.</li>
+<li>&ldquo;Organization cannot convert back to user.&rdquo; → The migration is one-way.</li>
+</ul>
+<p><strong>What this means for v1</strong>: design for staying a user account. The
+&ldquo;forward-compat to org&rdquo; framing is <em>partial</em> — the rulesets schema is
+identical, so the ruleset definitions in <code>policies/canonical-ruleset.json</code>
+transfer cleanly. But the enforcement plumbing (App, state file,
+workflows) must be rebuilt against the new installation. Plan it as a
+1-day project, not an afternoon, when you eventually do it.</p>
+<h3 id="74-railway-long-lived-token">7.4 Railway long-lived token<a class="anchor" href="#74-railway-long-lived-token" title="Permalink to this section">#</a></h3>
+<p>Until Railway ships OIDC, projects deploying to Railway will use
+<code>RAILWAY_TOKEN</code> in repo secrets. Lower bar than other providers.
+Documented per-repo in the threat model. Re-evaluate quarterly.</p>
+<h3 id="75-auto-detect-breaks-on-monorepos-without-stacksyml">7.5 Auto-detect breaks on monorepos without <code>stacks.yml</code><a class="anchor" href="#75-auto-detect-breaks-on-monorepos-without-stacksyml" title="Permalink to this section">#</a></h3>
+<p>First-time monorepo authors must read the docs and create <code>stacks.yml</code>
+on creation. The bootstrap script detects multi-stack repos at
+creation time and offers to scaffold <code>stacks.yml</code> automatically.</p>
+<h3 id="76-enforcement-requires-the-app-to-stay-installed">7.6 Enforcement requires the App to stay installed<a class="anchor" href="#76-enforcement-requires-the-app-to-stay-installed" title="Permalink to this section">#</a></h3>
+<p>If the App is uninstalled (intentionally or accidentally), enforcement
+and audit both stop. The App&rsquo;s own installation status is therefore
+audited by a tiny scheduled workflow (<code>app-canary.yml</code> in
+<code>nischal94/.github</code>) that runs daily and asks GitHub <em>as the user</em>,
+not as the App, &ldquo;is <code>nischal94-policy</code> still installed?&rdquo;</p>
+<p>The correct API call is <strong>not</strong> the App&rsquo;s own
+<code>GET /installation/repositories</code> (which fails the moment the App is
+uninstalled — an obvious chicken-and-egg). The canary uses
+<a href="https://docs.github.com/en/rest/apps/apps#get-a-user-installation-for-the-authenticated-app"><code>GET /users/{username}/installation</code></a>
+or, more directly, the user-token-authenticated endpoint
+<code>GET /user/installations</code>, called with a fine-grained PAT scoped to
+<strong>Account permissions: &ldquo;Installations: read&rdquo;</strong> (a real, documented
+fine-grained PAT scope on user accounts).</p>
+<p>Logic:
+1. Fetch <code>GET /user/installations</code>.
+2. If <code>nischal94-policy</code> is missing from the result → open an
+   <code>app-uninstalled</code> issue against <code>nischal94/.github</code> (manual
+   re-install required; the App cannot reinstall itself).
+3. If present → no-op.</p>
+<p>This is the <strong>only PAT in the system</strong>. Scope is read-only on a single
+metadata endpoint; cannot read repo contents, cannot write anything.
+Stored in <code>nischal94/.github</code> repo secret <code>CANARY_PAT</code>. Rotated
+annually via a calendar reminder.</p>
+<h3 id="77-license-check-first-week-friction">7.7 License-check first-week friction<a class="anchor" href="#77-license-check-first-week-friction" title="Permalink to this section">#</a></h3>
+<p>First push of a new project may hit 2-3 transitive deps with unfamiliar
+licenses. Author either allowlists, swaps, or adds to
+<code>LICENSE-OVERRIDE.md</code>. Cost is finite, friction is concentrated in the
+first week of a new project&rsquo;s life.</p>
+<h3 id="78-dco-dropped">7.8 DCO dropped<a class="anchor" href="#78-dco-dropped" title="Permalink to this section">#</a></h3>
+<p>Sign-off is unnecessary friction for a solo account. Will be re-enabled
+if/when external contributors join a specific project.</p>
+<h2 id="8-out-of-scope-explicit-non-goals">8. Out of scope (explicit non-goals)<a class="anchor" href="#8-out-of-scope-explicit-non-goals" title="Permalink to this section">#</a></h2>
+<ul>
+<li>Retroactive migration of existing 14 repos. They keep their current CI;
+  Layer 1 still applies via <code>.github</code> magic-name auto-supply.</li>
+<li>Multi-org governance / organization-wide policies (would require GHEC).</li>
+<li>Per-repo dashboards, build telemetry, or central observability. Each repo&rsquo;s
+  Actions tab is the source of truth.</li>
+<li>Cost allocation / chargeback (single-account, no need).</li>
+<li>A rules engine like <a href="https://www.openpolicyagent.org">OPA</a>. The 50-line
+  drift audit is sufficient at this scale.</li>
+</ul>
+<h2 id="9-implementation-outline-handed-to-writing-plans-next">9. Implementation outline (handed to writing-plans next)<a class="anchor" href="#9-implementation-outline-handed-to-writing-plans-next" title="Permalink to this section">#</a></h2>
+<p>In rough order of dependency:</p>
+<ol>
+<li>Register the <code>nischal94-policy</code> GitHub App. Permissions per §3.3.
+   Generate private key; store in 1Password Connect / AWS KMS / GCP
+   Secret Manager (one chosen during implementation, not specified
+   here). Configure OIDC trust policy per §3.3c.</li>
+<li>Create <code>nischal94/.github</code> repo (currently does not exist). Seed with:
+   - Community files (§3.8)
+   - Layer 1 universal workflows (§3.1, §3.2)
+   - <code>policies/canonical-ruleset.json</code>
+   - <code>policies/required-checks.yml</code>
+   - <code>state/configured-repos.json</code> (initially empty)
+   - <code>protected environment: prod-app-key</code> configured with required
+     reviewer + manual approval</li>
+<li>Implement <code>enforce-on-poll.yml</code> (§3.3b). Smoke-test:
+   - Create throwaway repo <code>nischal94/test-enforcement-1</code>
+   - Wait for the next poll
+   - Verify the canonical ruleset is applied via
+     <code>gh api repos/nischal94/test-enforcement-1/rulesets</code>
+   - Verify the state file is updated
+   - Verify a second poll is a no-op</li>
+<li>Implement <code>scaffold-on-poll.yml</code> (§3.3b). Smoke-test that it opens a
+   PR into <code>test-enforcement-1</code> materializing the Layer 1 workflows.</li>
+<li>Implement <code>drift-audit.yml</code> (§3.4). Smoke-test by manually corrupting
+   the ruleset on <code>test-enforcement-1</code> and verifying drift is detected
+   and a PR is opened.</li>
+<li>Implement <code>force-sync.yml</code> (§3.3b). Smoke-test manual dispatch.</li>
+<li>Refactor <code>nischal94/repo-template</code> per §4: add <code>.github/scripts/</code>,
+   <code>stacks.yml</code> example, eight language profile workflows, OIDC-based
+   <code>cd-deploy.yml</code>, <code>slsa-github-generator</code>-based release workflow.</li>
+<li>Replace <code>bootstrap.sh</code> per §4.7 (drop branch-protection logic, keep
+   stack scaffolding).</li>
+<li>Add <code>LICENSE-OVERRIDE.md</code> mechanism and the <code>license-check.yml</code>
+   workflow.</li>
+<li>Smoke-test end-to-end: create <code>nischal94/test-fullstack-1</code> from the
+    template, wait for the polling cycle, verify ruleset + workflows +
+    bootstrap PR all land correctly.</li>
+<li>Document the system in this repo&rsquo;s <code>README.md</code> and link from each
+    new repo&rsquo;s auto-generated README.</li>
+</ol>
+<p>A detailed implementation plan with task ordering, dependencies, and
+verification steps will be produced by the <code>writing-plans</code> skill in the
+next step.</p>
+<div class="footer">
+  <span>nischal94/repo-template · docs/specs/2026-05-09-enterprise-ci-template-design</span>
+  <span>Rendered from markdown · self-contained</span>
+</div>
+</main>
+</body>
+</html>
