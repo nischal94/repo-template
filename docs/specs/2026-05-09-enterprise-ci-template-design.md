@@ -1,12 +1,45 @@
 # Enterprise CI Template Design
 
-- **Status:** Draft v0.2, pending implementation plan
-- **Date:** 2026-05-09 (v0.1) · 2026-05-09 (v0.2 revision)
+- **Status:** Draft v0.3, pending implementation plan
+- **Date:** 2026-05-09 (v0.1, v0.2, v0.3 same-day revisions)
 - **Author:** Nischal (`@nischal94`)
 - **Scope:** Future repos created on the `nischal94` GitHub account
 - **Non-goals:** Retroactive migration of existing repos; multi-org governance; GHEC-specific features
 
 ## Changelog
+
+### v0.3 — 2026-05-09
+
+Surgical fixes from the third review pass. No architecture changes.
+
+- **§3.3c**: named the secret-manager root credential as a new SPOC on
+  solo accounts; mitigation = hardware MFA on the root credential.
+  Reframed the OIDC JSON example as "claim values to bind in your
+  trust policy," with provider-specific structure references for AWS /
+  GCP / 1Password.
+- **§3.3b**: added cross-workflow `state-writer` concurrency group so
+  enforce-on-poll, drift-audit, and force-sync serialize their state
+  file writes against each other (not just within each workflow).
+- **§3.3b**: documented the invariant that enforce-on-poll never
+  mutates state for already-configured repos — keeps scaffold-on-poll
+  safe to overlap with the next enforce cycle.
+- **§3.1**: named the license-check tool ([`github/licensed`](https://github.com/github/licensed))
+  rather than treating "license-check.yml" as a label.
+- **§3.7**: added `allow_auto_merge: true` to the org-level settings
+  list — required for §3.4's drift-PR auto-merge to function.
+- **§4.5**: clarified coverage regression handling — floor freezes at
+  current value if `main` drops below; PRs always blocked on delta,
+  never absolute.
+- **§4.6**: replaced invented Vercel/Fly OIDC action names with honest
+  language. Vercel and Fly OIDC are not yet first-party. Both providers
+  are documented as **using long-lived tokens until OIDC ships
+  natively**, treated as a known gap and re-evaluated quarterly.
+- **§7.6**: replaced incorrect sub-audit auth (fine-grained PAT
+  reading App-installation state, which doesn't work) with
+  `GET /users/nischal94/installations` via a fine-grained PAT scoped
+  to the user account.
+- Cross-reference fixes: §3.6 → §4.1 (correct location), §3.3c → §7.2.
+- Removed process-language leak from §4.6.
 
 ### v0.2 — 2026-05-09
 
@@ -126,7 +159,7 @@ Clicked at `gh repo create --template`. Owns:
 | `pin-actions.yml` | Fails if any `uses:` references a tag/branch instead of a SHA |
 | `pr-title.yml` | Conventional Commits enforcement on PR titles |
 | `signed-commits.yml` | Requires Verified signature on every commit |
-| `license-check.yml` | Blocking; allowlist-driven (see §3.5) |
+| `license-check.yml` | Blocking; allowlist-driven (see §3.5). Uses [`github/licensed`](https://github.com/github/licensed) v4 with SPDX expression mode. Per-ecosystem detection mappings live in `policies/license-config.yml`. |
 
 ### 3.2 Release-time mandatory workflows (block the release if they fail)
 
@@ -157,7 +190,7 @@ across all repos. Owns admin-grade actions that PATs cannot safely perform.
 
 **Why polling, not webhooks:** GitHub's `repository` webhook event with
 action `created` does not fire for user-owned repos — it is documented as
-organization-only. `nischal94` is a user account (see §7 for the rationale
+organization-only. `nischal94` is a user account (see §7.3 for the rationale
 behind staying a user account). Polling is the only mechanism that works on
 this account shape today.
 
@@ -216,15 +249,37 @@ All four workflows declare:
 
 ```yaml
 concurrency:
-  group: ${{ github.workflow }}
+  group: state-writer        # SHARED across all four workflows
   cancel-in-progress: false
 permissions:
   contents: read
-  id-token: write   # for OIDC to the secret manager
+  id-token: write             # for OIDC to the secret manager
 ```
 
-`cancel-in-progress: false` is intentional — overlapping `*/5` polls
-must serialize, never cancel each other (would corrupt state).
+`cancel-in-progress: false` is intentional — overlapping runs must
+serialize, never cancel each other (would corrupt state).
+
+**Shared concurrency group is critical.** Each workflow alone using
+`group: ${{ github.workflow }}` would only serialize *within* its own
+workflow. With three workflows (`enforce-on-poll`, `drift-audit`,
+`force-sync`) all writing `state/configured-repos.json`, a manual
+`force-sync` dispatched mid-`drift-audit` would race the audit's commit
+and risk state-file corruption. Using a single shared group named
+`state-writer` is the global lock that makes all state writes serial
+across the entire system.
+
+`scaffold-on-poll` does NOT write state, so it could in principle have
+its own group — but joining `state-writer` keeps the system simple
+(at the cost of a small amount of unnecessary serialization, which is
+fine because scaffold runs are infrequent).
+
+**Cross-workflow invariant** (load-bearing): `enforce-on-poll` must
+NEVER mutate state for repos already present in the state file. This
+keeps `scaffold-on-poll` (triggered by `workflow_run` after enforce)
+safe to overlap with the next `enforce-on-poll` cycle — the next
+enforce sees "already configured, skip," and reconciliation that
+genuinely needs to write back to state is the responsibility of
+`force-sync`, never enforce.
 
 #### 3.3c App private key — the trust-root question
 
@@ -240,18 +295,48 @@ including via a malicious PR using `pull_request_target`." Rejected.
 **Option 3.3c-B — External secret manager (1Password Connect / AWS KMS /
 GCP Secret Manager) pulled at runtime via OIDC**: trust root is
 "GitHub's OIDC issuer + the trust policy on the secret manager." The trust
-policy must pin both the repo and the environment, e.g.:
+policy must pin both the repo and the environment.
 
-```json
-{
-  "sub": "repo:nischal94/.github:environment:prod-app-key",
-  "aud": "https://github.com/nischal94"
-}
+The OIDC token claim values to bind in your secret manager's trust
+policy:
+
 ```
+sub: repo:nischal94/.github:environment:prod-app-key
+aud: <provider-specific custom audience, configured in the workflow>
+```
+
+**Actual trust-policy structure is provider-specific.** For AWS IAM,
+wrap the claim conditions in `Effect`/`Principal`/`Condition.StringEquals`.
+For GCP Workload Identity Pool, configure attribute mappings on the
+provider. For 1Password Connect, see [their OIDC integration guide](https://developer.1password.com/docs/connect/manage-secrets/integrate-with-github-actions).
+The implementation plan picks one provider; the trust policy is
+authored against that provider's schema.
 
 The workflow declares `environment: prod-app-key` to mint a token whose
 OIDC claim includes that environment binding. The environment must require
 *manual approval* before the deployment runs.
+
+**Recursive-trust caveat (the secret-manager root credential is a new SPOC).**
+OIDC-based access from GitHub to the secret manager removes the App key
+from GitHub repo secrets — a real improvement. But the secret manager
+itself must be authenticated by *something*: AWS root account credentials,
+GCP project owner login, or the 1Password master password. On a solo
+account these credentials are inevitably held by you alone — they
+*are* a single point of compromise, just relocated.
+
+What this design buys is a **harder compromise surface**, not its
+elimination:
+- Before v0.2: "push to `nischal94/.github`'s `main` branch" → can read
+  the App key from the repo secret. One step.
+- After v0.2: "compromise the GitHub session AND the secret-manager
+  root credentials AND (if hardware-keyed) physical possession of the
+  hardware key" → can read the App key. Three independent factors.
+
+**Required mitigation**: hardware MFA on the secret-manager root
+credentials (AWS hardware MFA token / GCP Titan Security Key /
+1Password biometric+device-trust). This converts the recursive trust
+from "still a software-only chain" to "requires physical access at
+the root." Documented in the threat model.
 
 **Honest caveat**: as a solo dev, "manual approval by self" is a
 self-approval. GitHub's environment-protection feature lets you require
@@ -270,7 +355,7 @@ personal accounts.
 
 **Decision for v0.2**: ship 3.3c-B. The environment+OIDC approach is
 the strongest available on a user account today. The "self-approval"
-caveat is documented in §7 as a known limitation. If you ever convert
+caveat is documented in §7.2 as a known limitation. If you ever convert
 to org mode, replace the environment gate with required-reviewer-not-self
 on the org's `.github` repo (which orgs *can* enforce).
 
@@ -442,16 +527,31 @@ blocking) or break stack-specific jobs the first time they touch
 PyPI/npm/proxy.golang.org. `audit` mode in Layer 1 still produces the
 egress report — useful signal — without false-positive failures. The
 real `block` mode lives next to the stack-aware allowlist in Layer 2's
-`.github/scripts/ci-<stack>.sh` (see §4.4).
+`.github/scripts/ci-<stack>.sh` (see §4.1 for the file layout, §4.4 for
+the per-profile contents).
 
-### 3.7 Org-level settings (one-time)
+### 3.7 Account-level and per-repo settings (one-time + per-repo)
 
-Set via the GitHub App's bootstrap routine on `nischal94/.github`:
+Set via the GitHub App on the user account once, and per-repo on each
+`enforce-on-poll` cycle:
+
+**Account-level (one-time):**
 - `secret_scanning_push_protection`: enabled (rejects pushes containing
   secrets at the remote, before they land).
 - Default `actions.permissions`: `selected` with allowlist of pinned upstream
   actions.
 - Default workflow permissions: read-only.
+
+**Per-repo (set by App's enforcement routine):**
+- `allow_auto_merge: true` — required for §3.4's drift-PR auto-merge
+  to function. Without this setting, drift PRs would sit open
+  indefinitely instead of merging when checks pass.
+- `allow_squash_merge: true`, `allow_merge_commit: false`,
+  `allow_rebase_merge: false` — squash-only merge policy (consistent
+  Conventional Commit history on `main`).
+- `delete_branch_on_merge: true` — automatic feature-branch cleanup.
+- `web_commit_signoff_required: false` (we use Conventional Commits
+  + signed-commits, not DCO sign-off — see §7.8).
 
 ### 3.8 Community files
 
@@ -602,19 +702,67 @@ current floor, current `main` coverage, and phase.
 retrofit tests on a greenfield project. Both are configurable per-repo
 in `.github/coverage-config.yml` if you have a reason to deviate.
 
-### 4.6 CD: OIDC mandatory, never long-lived tokens
+**Regression semantics under flake.** If `main` coverage drops below
+floor after a flake or merge-commit measurement issue, the floor
+*freezes at the new value* until the project recovers, then re-ratchets.
+PRs are always blocked on **delta** (PR-introduced regression of more
+than 1 percentage point), not on absolute floor compliance once steady
+state is broken. This avoids the trap where a single flake permanently
+blocks every subsequent PR. Recovery rule: when `main` re-crosses the
+original floor, the floor un-freezes and resumes its original value.
 
-The OIDC mandate applies *whenever `cd-deploy.yml` runs* (i.e. when the
-deploy-target marker file is present). Repos with no CD don't need OIDC
-configured.
+### 4.6 CD: OIDC where supported, long-lived tokens elsewhere (documented gap)
 
-`cd-deploy.yml` uses [OpenID Connect](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect):
+The OIDC preference applies *whenever `cd-deploy.yml` runs* (i.e. when
+the deploy-target marker file is present). Repos with no CD don't need
+deploy auth configured at all.
 
-- Vercel: federated identity via `vercel-token-action` with OIDC.
-- Fly.io: OIDC via `flyctl auth tokens issue --oidc`.
-- Railway: **exception**. Railway does not yet support OIDC. Long-lived
-  `RAILWAY_TOKEN` allowed, with explicit comment in workflow + entry in repo
-  threat model. Re-evaluate quarterly.
+`cd-deploy.yml` uses [OpenID Connect](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect)
+where the deploy provider supports it natively. As of 2026-05, the
+provider OIDC landscape is **uneven**:
+
+| Provider | OIDC status | Mechanism in `cd-deploy.yml` |
+| --- | --- | --- |
+| AWS | ✅ Native | `aws-actions/configure-aws-credentials@v4` with OIDC role |
+| GCP | ✅ Native | `google-github-actions/auth@v2` with Workload Identity Federation |
+| Azure | ✅ Native | `azure/login@v2` with OIDC subject |
+| Cloudflare | ✅ Native | `cloudflare/wrangler-action@v3` (uses scoped API tokens, OIDC support being rolled out) |
+| **Vercel** | ❌ **No first-party OIDC action** as of 2026-05 | Uses Vercel CLI with project-scoped token from `VERCEL_TOKEN` repo secret. Documented as a gap. |
+| **Fly.io** | ❌ **OIDC integration incomplete** as of 2026-05 (macaroon-based deploy tokens, no `flyctl --oidc` subcommand) | Uses `superfly/flyctl-actions/setup-flyctl@master` with `FLY_API_TOKEN` repo secret. Documented as a gap. |
+| Railway | ❌ No OIDC support | `RAILWAY_TOKEN` repo secret; documented as a gap. |
+| Render | ❌ No OIDC support | Render deploy hook URL stored in repo secret; documented as a gap. |
+
+**Documented-gap policy for Vercel / Fly / Railway / Render:**
+
+These providers are popular for solo / small-team products and dropping
+them entirely would push every project toward AWS-shaped infrastructure
+that's overkill for most use cases. So they're allowed in v1 with these
+explicit guardrails:
+
+1. The repo's `THREAT_MODEL.md` lists each long-lived deploy token as a
+   "credentials-at-rest" risk with the line: *"Compromise of GitHub
+   repo secrets discloses the deploy token; recovery requires rotating
+   the token and re-deploying."*
+2. Each token is **project-scoped** (not account-scoped) at the
+   provider — so a leaked Vercel token can only redeploy that one
+   project, not exfiltrate other projects' secrets or deploy
+   destructive payloads to siblings.
+3. Tokens are **rotated quarterly** via a scheduled workflow that
+   opens an issue reminding to rotate. Rotation is manual today;
+   automated when the provider ships an API for it.
+4. The provider's OIDC status is **re-evaluated quarterly**. When any
+   provider in the gap list ships first-party OIDC, that repo's CD
+   migrates to OIDC in a single PR.
+
+This is honest "we'll get there when the provider gets there"
+documentation, not pretending OIDC works when it doesn't.
+
+**SLSA L3 build provenance is NOT affected by this gap.** Build
+attestation lives in the `release.yml` workflow (using
+`slsa-github-generator` as documented below) and runs *before* deploy.
+A compromised deploy token can re-deploy an old artifact, but cannot
+forge build provenance for a new artifact — the provenance chain stays
+intact.
 
 **SLSA Build L3 via `slsa-github-generator`:** the
 [`slsa-framework/slsa-github-generator`](https://github.com/slsa-framework/slsa-github-generator)
@@ -642,9 +790,9 @@ runner and produces the in-toto attestation.
    workflow's allowlist explicitly covers `slsa-framework/*`. This
    tradeoff is documented in the threat model.
 
-The image's "Verifies app builds in CI" row from the user's reference
-image is satisfied by the generator's build step; provenance attestation
-is the additional artifact.
+The "Verifies app builds in CI" row from the reference CI table in §6
+is satisfied by the generator's build step; provenance attestation is
+the additional artifact produced alongside the build output.
 
 ### 4.7 Bootstrap script
 
@@ -768,12 +916,31 @@ creation time and offers to scaffold `stacks.yml` automatically.
 ### 7.6 Enforcement requires the App to stay installed
 
 If the App is uninstalled (intentionally or accidentally), enforcement
-and audit both stop. The App's own installation status is itself
-audited by a tiny scheduled workflow that pings
-`GET /installation/repositories` daily and opens an issue against
-`nischal94/.github` if it fails. This sub-audit uses a fine-grained PAT
-with read-only scope on the App's metadata — the only PAT in the
-system, scoped narrowly enough to be safe.
+and audit both stop. The App's own installation status is therefore
+audited by a tiny scheduled workflow (`app-canary.yml` in
+`nischal94/.github`) that runs daily and asks GitHub *as the user*,
+not as the App, "is `nischal94-policy` still installed?"
+
+The correct API call is **not** the App's own
+`GET /installation/repositories` (which fails the moment the App is
+uninstalled — an obvious chicken-and-egg). The canary uses
+[`GET /users/{username}/installation`](https://docs.github.com/en/rest/apps/apps#get-a-user-installation-for-the-authenticated-app)
+or, more directly, the user-token-authenticated endpoint
+`GET /user/installations`, called with a fine-grained PAT scoped to
+**Account permissions: "Installations: read"** (a real, documented
+fine-grained PAT scope on user accounts).
+
+Logic:
+1. Fetch `GET /user/installations`.
+2. If `nischal94-policy` is missing from the result → open an
+   `app-uninstalled` issue against `nischal94/.github` (manual
+   re-install required; the App cannot reinstall itself).
+3. If present → no-op.
+
+This is the **only PAT in the system**. Scope is read-only on a single
+metadata endpoint; cannot read repo contents, cannot write anything.
+Stored in `nischal94/.github` repo secret `CANARY_PAT`. Rotated
+annually via a calendar reminder.
 
 ### 7.7 License-check first-week friction
 
