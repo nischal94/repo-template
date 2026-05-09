@@ -422,9 +422,11 @@ hardening:</p>
   manager dropped. The threat model that justified Connect + hardware
   MFA (untrusted contributors with PR access) does not currently apply.
   When it does, upgrade path is documented.</li>
-<li><strong>TOTP MFA on the GitHub account login</strong> is the new authentication
-  floor. Stronger than password-only, weaker than a YubiKey. Documented
-  honestly. YubiKey upgrade path noted as future improvement.</li>
+<li><strong>2FA on the GitHub account login</strong> is the new authentication
+  floor: passkeys (preferred), with TOTP via Google Authenticator,
+  WebAuthn security keys, and GitHub Mobile as additional methods;
+  recovery codes stored offline. Phishing-resistant methods (passkeys,
+  security keys) are already configured.</li>
 <li><strong>Branch protection on <code>nischal94/.github</code>&rsquo;s <code>main</code></strong> carries the
   trust boundary: signed commits required, PR review required, no
   force-push, no deletion, no <code>pull_request_target</code> workflows ever.</li>
@@ -868,8 +870,6 @@ private key needs <code>secrets:</code> treatment.</p>
 on enterprise customers who do security due diligence, upgrade in
 this order — each step independently improves security:</p>
 <ol>
-<li><strong>Hardware security key (YubiKey) on GitHub login</strong> — replaces
-   TOTP. ~$50 one-time. Phishing-resistant.</li>
 <li><strong>External secret manager</strong> (1Password Connect or AWS KMS) — moves
    the App key off GitHub. Re-introduces the recursive-trust complexity
    v0.3 documented, so only worth doing when threat model justifies it.</li>
@@ -877,6 +877,8 @@ this order — each step independently improves security:</p>
    but unlocks org-level rulesets, required-reviewer-not-self gates,
    and audit log retention.</li>
 </ol>
+<p>(Phishing-resistant 2FA via passkeys + WebAuthn security keys is
+already deployed on the <code>nischal94</code> login — see §7.2.)</p>
 <h4 id="33d-race-window-characterization">3.3d Race window characterization<a class="anchor" href="#33d-race-window-characterization" title="Permalink to this section">#</a></h4>
 <p>GitHub&rsquo;s <a href="https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#schedule">scheduled workflow documentation</a>
 is explicit: cron schedules &ldquo;may be delayed during periods of high load&rdquo;
@@ -1578,30 +1580,27 @@ cookie or who can authenticate as <code>nischal94</code> can read or replace
 session/login itself uncompromised.</p>
 <p>The login compromise vector is the bigger risk. Mitigations in v0.4:</p>
 <ul>
-<li><strong>2FA on the GitHub account</strong> (TOTP via Google Authenticator/Authy,
-  with passkey and security-key options also supported). Defends
-  against passive password reuse and most credential-stuffing attacks.
-  TOTP alone is vulnerable to real-time phishing — an attacker who
-  tricks you into typing both password and TOTP code on a fake page
-  within ~30 seconds wins; passkeys and security keys are phishing-
-  resistant and close that gap.</li>
+<li><strong>Phishing-resistant 2FA</strong> on the <code>nischal94</code> GitHub account:
+  passkeys (preferred, via iCloud Keychain), WebAuthn security keys,
+  GitHub Mobile, and TOTP via Google Authenticator as a fallback;
+  recovery codes generated and stored offline. Passkeys and security
+  keys are phishing-resistant — an attacker running real-time phishing
+  cannot replay them, because they&rsquo;re scoped to GitHub&rsquo;s origin and
+  require physical/biometric presence at the legitimate site.</li>
 <li><strong>Branch protection on <code>nischal94/.github</code></strong> ensures even with push
   access, code changes need PR + signed commit. Self-approval limits
   this to &ldquo;speed bump&rdquo; not &ldquo;two-person rule.&rdquo;</li>
 <li><strong>No <code>pull_request_target</code> workflows</strong> in <code>nischal94/.github</code> —
   closes the malicious-PR exfiltration path.</li>
 </ul>
-<p><strong>YubiKey upgrade path</strong>: enrolling a hardware security key on the
-GitHub account login closes the real-time phishing vector. Cost: ~$50
-one-time, ~10 min enrollment. Strongly recommended when this account
-ever touches anything sensitive (real customer data, paying users,
-production systems with revenue impact). Until then, TOTP is the
-honest middle.</p>
-<p><strong>Honest summary</strong>: a determined attacker who phishes you in real-time
-and gets through TOTP can compromise the App key. This is the same
-threat that compromises every other secret you have on GitHub today
-(repo secrets, PATs, OAuth tokens). The App key is not specially
-protected; it inherits whatever security your GitHub login has.</p>
+<p><strong>Honest summary</strong>: the trust root is the <code>nischal94</code> GitHub login.
+That login is protected by phishing-resistant 2FA (passkeys + security
+keys), which is the strongest practical protection GitHub offers for a
+user account. A determined attacker who compromises the underlying
+device (e.g., malware on the laptop holding the passkey) can still
+reach the App key — but that&rsquo;s a much higher bar than credential
+phishing. The App key inherits whatever security your GitHub login
+has, and the login&rsquo;s security is already at its practical ceiling.</p>
 <h3 id="73-migration-to-organization-mode-is-a-substantial-project-not-an-upgrade">7.3 Migration to organization mode is a substantial project, not an upgrade<a class="anchor" href="#73-migration-to-organization-mode-is-a-substantial-project-not-an-upgrade" title="Permalink to this section">#</a></h3>
 <p>Per <a href="https://docs.github.com/en/account-and-profile/reference/personal-account-reference">GitHub&rsquo;s documented side effects</a>
 of converting a user account to an organization:</p>
