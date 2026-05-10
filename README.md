@@ -111,7 +111,7 @@ Layer 2 status checks (`ci-*` per language) are **not** in the required list —
 
 Two complementary options:
 
-- **`claude.yml`** workflow (auto-scaffolded with Layer 1) — triggered by `@claude` mentions in PRs/issues. Needs `ANTHROPIC_API_KEY` repo secret.
+- **`claude.yml`** workflow (ships with this template; not delivered by Layer 1 scaffold) — triggered by `@claude` mentions in PRs/issues. Needs `ANTHROPIC_API_KEY` repo secret.
 - **CodeRabbit / Greptile** (GitHub Apps, install once at account level) — passive review on every PR, no per-repo config:
   - https://github.com/apps/coderabbitai
   - https://github.com/apps/greptileai
