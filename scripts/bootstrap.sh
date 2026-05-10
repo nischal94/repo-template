@@ -16,11 +16,11 @@ LICENSE=${LICENSE:-MIT}
 
 # Initialize toolchain.
 case "$LANG" in
-  node)   npm init -y > /dev/null ;;
-  python) test -f pyproject.toml || python -m venv .venv && pip install uv && uv init . ;;
-  go)     test -f go.mod || go mod init "github.com/nischal94/$PROJECT_NAME" ;;
-  shell)  echo "Shell project; no toolchain init." ;;
-  *)      echo "Unknown lang; skipping toolchain init." ;;
+node) npm init -y >/dev/null ;;
+python) test -f pyproject.toml || python -m venv .venv && pip install uv && uv init . ;;
+go) test -f go.mod || go mod init "github.com/nischal94/$PROJECT_NAME" ;;
+shell) echo "Shell project; no toolchain init." ;;
+*) echo "Unknown lang; skipping toolchain init." ;;
 esac
 
 # Remove unused profile workflows for a cleaner Actions tab.
@@ -29,22 +29,22 @@ for w in .github/workflows/ci-*.yml; do
   base=$(basename "$w" .yml)
   stack=${base#ci-}
   case "$stack" in
-    "$KEEP"|docker|sql|e2e|docs|shell) : ;; # keep cross-cutting + chosen
-    *) rm -f "$w" ;;
+  "$KEEP" | docker | sql | e2e | docs | shell) : ;; # keep cross-cutting + chosen
+  *) rm -f "$w" ;;
   esac
 done
 
 # Wire Makefile to language-specific commands.
-cat > Makefile <<EOF
+cat >Makefile <<EOF
 .PHONY: install lint test build ci
 
 install:
 EOF
 case "$LANG" in
-  node)   echo "	npm install" >> Makefile ;;
-  python) echo "	pip install -e .[dev,test]" >> Makefile ;;
-  go)     echo "	go mod download" >> Makefile ;;
-  *)      echo "	@echo 'No install command configured.'" >> Makefile ;;
+node) echo "	npm install" >>Makefile ;;
+python) echo "	pip install -e .[dev,test]" >>Makefile ;;
+go) echo "	go mod download" >>Makefile ;;
+*) echo "	@echo 'No install command configured.'" >>Makefile ;;
 esac
 # ... (lint, test, build, ci targets follow same pattern)
 

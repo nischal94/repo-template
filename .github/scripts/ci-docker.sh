@@ -2,7 +2,7 @@
 set -euo pipefail
 echo "==> hadolint..."
 if [ -f Dockerfile ]; then
-  docker run --rm -i hadolint/hadolint < Dockerfile
+  docker run --rm -i hadolint/hadolint <Dockerfile
 fi
 echo "==> Build image..."
 docker build -t local/test:ci .

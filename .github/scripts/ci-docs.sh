@@ -11,4 +11,4 @@ elif [ -d docs ]; then
   echo "Plain docs/ dir, no build step. Running link-check only."
 fi
 echo "==> Link check..."
-npx -y markdown-link-check **/*.md || true # advisory until tuned
+npx -y markdown-link-check ./**/*.md || true # advisory until tuned

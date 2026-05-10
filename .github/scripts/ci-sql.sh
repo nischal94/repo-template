@@ -12,7 +12,8 @@ if [ -f drizzle.config.ts ] || [ -f drizzle.config.js ]; then
   npx drizzle-kit check || true # advisory in v1
 fi
 echo "==> Run pg-tap tests..."
-if find . -name "*.test.sql" | grep -q .; then
+mapfile -t TEST_SQL_FILES < <(find . -name "*.test.sql")
+if [ "${#TEST_SQL_FILES[@]}" -gt 0 ]; then
   pg_prove --recurse --pset tuples_only=1 --schema test \
-    $(find . -name "*.test.sql")
+    "${TEST_SQL_FILES[@]}"
 fi

@@ -23,7 +23,7 @@ jobs:
             else
               echo "applies=false" >> "$GITHUB_OUTPUT"
             fi
-          elif [ -f pyproject.toml ] || ls requirements*.txt 2>/dev/null | grep -q .; then
+          elif [ -f pyproject.toml ] || compgen -G "requirements*.txt" > /dev/null; then
             echo "applies=true" >> "$GITHUB_OUTPUT"
           else
             echo "applies=false" >> "$GITHUB_OUTPUT"
