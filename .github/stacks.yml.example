@@ -1,0 +1,10 @@
+# Optional manifest for monorepos. Rename to stacks.yml to activate.
+# When present, stacks.yml overrides auto-detection (spec §4.3).
+stacks:
+  - kind: node
+    path: services/web
+  - kind: python
+    path: services/api
+ignore:
+  - third_party/
+  - examples/

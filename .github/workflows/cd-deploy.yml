@@ -1,0 +1,67 @@
+name: cd-deploy
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  deployments: write
+concurrency:
+  group: cd-deploy
+  cancel-in-progress: false
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      applies: ${{ steps.check.outputs.applies }}
+      target: ${{ steps.check.outputs.target }}
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - id: check
+        run: |
+          if [ -f vercel.json ]; then
+            echo "applies=true" >> "$GITHUB_OUTPUT"
+            echo "target=vercel" >> "$GITHUB_OUTPUT"
+          elif [ -f fly.toml ]; then
+            echo "applies=true" >> "$GITHUB_OUTPUT"
+            echo "target=fly" >> "$GITHUB_OUTPUT"
+          elif [ -f railway.toml ]; then
+            echo "applies=true" >> "$GITHUB_OUTPUT"
+            echo "target=railway" >> "$GITHUB_OUTPUT"
+          else
+            echo "applies=false" >> "$GITHUB_OUTPUT"
+          fi
+  deploy:
+    needs: detect
+    if: needs.detect.outputs.applies == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      preview-url: ${{ steps.deploy.outputs.preview-url }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          URL=$(bash .github/scripts/cd-deploy.sh)
+          echo "preview-url=$URL" >> "$GITHUB_OUTPUT"
+  smoke:
+    needs: deploy
+    if: needs.deploy.outputs.preview-url != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Run cd-smoke.sh
+        env:
+          PREVIEW_URL: ${{ needs.deploy.outputs.preview-url }}
+        run: bash .github/scripts/cd-smoke.sh

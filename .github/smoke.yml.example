@@ -1,0 +1,5 @@
+# Routes hit by cd-deploy.yml's smoke job after a successful deploy. Rename to smoke.yml.
+routes:
+  - /
+  - /api/healthz
+  - /login

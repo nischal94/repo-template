@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+echo "==> go mod download..."
+go mod download
+echo "==> go vet..."
+go vet ./...
+echo "==> staticcheck..."
+go install honnef.co/go/tools/cmd/staticcheck@latest
+staticcheck ./...
+echo "==> govulncheck..."
+go install golang.org/x/vuln/cmd/govulncheck@latest
+govulncheck ./...
+echo "==> Test with race + coverage..."
+go test -race -coverprofile=coverage.out -covermode=atomic ./...
+echo "==> Build..."
+go build ./...
