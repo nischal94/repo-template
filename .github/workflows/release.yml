@@ -1,0 +1,67 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+  id-token: write
+  actions: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.hash.outputs.digest }}
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Build
+        run: |
+          mkdir -p dist
+          # Stack-specific build invoked here; for the template itself,
+          # this is a no-op tarball of docs/.
+          tar -czf "dist/release-${GITHUB_REF#refs/tags/}.tar.gz" docs/
+      - id: hash
+        run: |
+          # slsa-github-generator's `base64-subjects` expects a
+          # base64-encoded list of `<sha256>  <filename>` lines —
+          # i.e., the literal output of `sha256sum`, base64-encoded
+          # with no line wrapping. Single-file case only here; if
+          # this template ever ships multiple release artifacts,
+          # update the build to produce them all in dist/ first
+          # (sha256sum * already handles multiple files correctly,
+          # but the workflow's intent must be a single subjects blob).
+          cd dist
+          shopt -s nullglob
+          FILES=( *.tar.gz )
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "::error::No artifacts in dist/ to attest."
+            exit 1
+          fi
+          DIGEST=$(sha256sum "${FILES[@]}" | base64 -w0)
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "Subjects (pre-base64):"
+          sha256sum "${FILES[@]}"
+      - uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
+        with:
+          name: release-artifacts
+          path: dist/
+          retention-days: 365
+  provenance:
+    needs: build
+    # Per spec §4.6 tag-pinning exception: SLSA generator MUST be tag-pinned.
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    with:
+      base64-subjects: ${{ needs.build.outputs.digest }}
+      provenance-name: release.intoto.jsonl
+      upload-assets: true
+  release:
+    needs: [build, provenance]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: release-artifacts
+          path: dist/
+      - uses: softprops/action-gh-release@01570a1f39cb168c169c69a18e1c2398200e0fe1 # v2.0.6
+        with:
+          files: dist/*
+          generate_release_notes: true
