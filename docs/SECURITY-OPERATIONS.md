@@ -36,7 +36,7 @@ The template provides workflows for the prevention layer + scaffolds the detecti
 
 ## 2. Post-creation checklist (per repo)
 
-After creating a new repo from this template — or when retrofitting an existing repo — complete the following. Most are one-time UI clicks.
+After creating a new repo from this template, most setup is automated. The `nischal94-policy` GitHub App applies branch protection and delivers the 8 universal Layer-1 security workflows on enrollment — see [`.github/docs/POLICIES.md`](https://github.com/nischal94/.github/blob/main/docs/POLICIES.md) for what gets enforced. The checklist below is what's still per-repo.
 
 ### 2.1 Repo-level security toggles
 **Settings → Code security:**
@@ -47,19 +47,19 @@ After creating a new repo from this template — or when retrofitting an existin
 - [ ] **Push protection** → Enable
 - [ ] **CodeQL → Default setup** → Enable (auto-detects languages; preferred over a custom workflow file)
 
-### 2.2 Branch protection on `main`
-**Settings → Branches → Add rule for `main`:**
-- [ ] Require pull request before merging (1 approval, dismiss stale on push)
-- [ ] Require status checks: `gitleaks`, `Validate PR title`, plus any project-specific CI jobs
-- [ ] Require conversation resolution
-- [ ] Block force pushes
-- [ ] Block deletions
-- [ ] (Optional but recommended) Require signed commits
-- [ ] Set `enforce_admins: false` so you can break-glass on solo repos
+### 2.2 Layer-1 enrollment
+**Required for branch protection + universal security workflows.** Edit [`SCAFFOLD_ALLOWLIST` in `nischal94/.github`'s `scaffold-on-poll.yml`](https://github.com/nischal94/.github/blob/main/.github/workflows/scaffold-on-poll.yml#L51) to add your repo's full name, open a PR there, merge.
 
-### 2.3 Tag protection
-**Settings → Tags → Add rule:**
-- [ ] Pattern `v*` (prevents overwriting/deleting release tags)
+Within ~5 minutes the App opens an auto-PR on your repo with the 8 Layer-1 workflows + the `.scaffolded-by-nischal94-policy` marker file. Merge it. On the next 5-min cron tick, `enforce-on-poll` applies the canonical ruleset to your `main` automatically.
+
+After enrollment, **do not** create a classic branch protection rule via Settings → Branches; the canonical ruleset is the single source of truth and a duplicate classic rule will cause check-name mismatches that deadlock PRs.
+
+### 2.3 Release-tag protection
+**Settings → Rules → Rulesets → New ruleset:**
+- [ ] Target: `Tag`, pattern `v*`
+- [ ] Block deletion + block updates (prevents overwriting or removing published release tags)
+
+This is per-repo because the canonical ruleset only targets `main`, not tags. A future improvement would extend the canonical ruleset to cover tags (see [`.github`#open-issue if filed]).
 
 ### 2.4 Actions security
 **Settings → Actions → General:**
@@ -72,9 +72,10 @@ After creating a new repo from this template — or when retrofitting an existin
   ```
   gh secret set ANTHROPIC_API_KEY -R <owner>/<repo>
   ```
+- [ ] `VERCEL_TOKEN` / `FLY_API_TOKEN` / `RAILWAY_TOKEN` — only the one matching your CD target (`cd-deploy.yml` autodetects via `vercel.json` / `fly.toml` / `railway.toml`)
 
 ### 2.6 Dependabot ecosystem activation
-Edit `.github/dependabot.yml` — uncomment the `pip` / `npm` / `docker` block(s) matching the repo's stack. The grouping config is pre-set to collapse update bursts.
+Edit `.github/dependabot.yml` — uncomment the `pip` / `npm` / `docker` block(s) matching the repo's stack. The grouping config is pre-set to collapse update bursts. The `gh-actions` block is enabled by default and is delivered by Layer-1.
 
 ### 2.7 README badges (optional)
 After the first Scorecard run completes (Mondays + on push to main):
@@ -84,58 +85,42 @@ After the first Scorecard run completes (Mondays + on push to main):
 
 ---
 
-## 3. Branch protection — required configuration
+## 3. Branch protection (canonical ruleset)
 
-The template's workflows produce these check names; not all should be required (path-scoped checks would deadlock doc-only PRs).
+Branch protection on `main` is enforced by the **canonical ruleset** that the `nischal94-policy` GitHub App applies on enrollment. Authoritative source: [`policies/canonical-ruleset.json`](https://github.com/nischal94/.github/blob/main/policies/canonical-ruleset.json).
 
-| Check | Required? | Reasoning |
-|---|---|---|
-| `gitleaks` | ✅ Required | Runs on every PR; blocks new secrets |
-| `Validate PR title` | ✅ Required | Runs on every PR; enforces Conventional Commits |
-| `actionlint` | ❌ Advisory | Only fires on `.github/workflows/**` changes; would block doc PRs |
-| `dependency-review` | ❌ Advisory | Only fires on manifest changes; would block doc PRs |
-| Project-specific CI | ✅ Required | Whatever runs on every PR (tests, build) |
-| CodeQL | ✅ Required | Add once you enable CodeQL default setup |
+What's enforced (full detail in [`POLICIES.md`](https://github.com/nischal94/.github/blob/main/docs/POLICIES.md)):
 
-API call to apply (replace `<repo>`):
-```bash
-gh api -X PUT repos/nischal94/<repo>/branches/main/protection \
-  --input <(cat <<'EOF'
-{
-  "required_status_checks": {
-    "strict": true,
-    "checks": [
-      {"context": "gitleaks"},
-      {"context": "Validate PR title"}
-    ]
-  },
-  "enforce_admins": false,
-  "required_pull_request_reviews": {
-    "dismiss_stale_reviews": true,
-    "required_approving_review_count": 1,
-    "require_last_push_approval": false
-  },
-  "restrictions": null,
-  "allow_force_pushes": false,
-  "allow_deletions": false,
-  "required_conversation_resolution": true
-}
-EOF
-)
-```
+| Rule | Effect |
+|---|---|
+| `required_signatures` | All commits must be cryptographically signed |
+| `non_fast_forward` | No force-pushes |
+| `deletion` | Branch cannot be deleted |
+| `creation` | Branch cannot be re-created from a different SHA |
+| `pull_request` | PR-only changes; review thread resolution required |
+| `required_status_checks` (strict) | All 7 Layer-1 checks must pass: `gitleaks`, `dependency-review`, `osv-scanner`, `actionlint`, `pin-actions`, `validate-pr-title`, `license-check` |
+
+**Bypass:** only `nischal94-policy` (Integration ID 3656026). No human bypass — including the repo owner. This is the spec §7.2 trust boundary.
+
+**Solo-account note:** `required_approving_review_count` is set to `0` because GitHub forbids approving your own PR; on a single-identity account a non-zero count would deadlock all merges. When taking on collaborators, edit `policies/canonical-ruleset.json` → `1` and merge — drift-audit propagates the change to all enrolled repos within a week, or run `force-sync.yml` for immediate.
+
+**To modify the ruleset for all enrolled repos:** edit `policies/canonical-ruleset.json` on `nischal94/.github`, open a PR, merge. The next `enforce-on-poll` cron tick (`*/5` min) re-applies. To force immediate propagation, dispatch `force-sync.yml` manually with `target=all`.
 
 ---
 
 ## 4. Promotion path: advisory → required
 
-Many security workflows ship as advisory (`continue-on-error: true`) on first run because they surface a baseline of pre-existing issues. The promotion path:
+When a new universal security workflow proves itself useful enough to be required across all repos, promote it to the canonical ruleset:
 
-1. **Run advisory** — workflow fires on every PR, surfaces findings, doesn't block.
-2. **Triage baseline** — fix true positives in a dedicated cleanup PR; annotate false positives (`# nosec`, `.trivyignore`, etc).
-3. **Remove `continue-on-error: true`** from the workflow.
-4. **Add to required-checks list** via branch protection API.
+1. **Add the workflow to `nischal94/.github`** as a new file under `.github/workflows/` (SHA-pin all `uses:` refs per the canonical pin-actions rule).
+2. **Add the workflow's filename to `scaffold-on-poll.yml`'s copy loop** (so future scaffold PRs deliver it). Optionally manually copy it into already-enrolled repos (or wait for drift-audit's next Sunday run to propagate it).
+3. **Run advisory** for at least a week — workflow fires on every PR, surfaces a baseline of findings, doesn't block.
+4. **Triage baseline** — fix true positives in a dedicated cleanup PR per repo; annotate false positives (`# nosec`, `.trivyignore`, etc).
+5. **Add the check name to `policies/canonical-ruleset.json`'s `required_status_checks` array** + merge to `nischal94/.github`. The next `enforce-on-poll` propagates the new required check to every enrolled repo's ruleset.
 
-Workflows that benefit from this pattern: `actionlint`, `bandit`, `trivy`, `pip-audit`, `ruff`.
+Workflows that are good candidates for future promotion: `bandit` (Python SAST), `trivy` (container scan), `pip-audit`, `eslint-plugin-security`. Today's required list (the 7 above) is the floor, not the ceiling.
+
+For a workflow that's stack-specific (only useful for repos using a particular language), keep it in `repo-template`'s Layer-2 tier rather than promoting to Layer-1 — Layer-1 is for *universal* workflows only.
 
 ---
 

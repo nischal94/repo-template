@@ -35,18 +35,82 @@ for w in .github/workflows/ci-*.yml; do
 done
 
 # Wire Makefile to language-specific commands.
-cat >Makefile <<EOF
+# Targets map to standard tooling per language; customize after bootstrap.
+cat >Makefile <<'EOF'
 .PHONY: install lint test build ci
 
-install:
 EOF
+
 case "$LANG" in
-node) echo "	npm install" >>Makefile ;;
-python) echo "	pip install -e .[dev,test]" >>Makefile ;;
-go) echo "	go mod download" >>Makefile ;;
-*) echo "	@echo 'No install command configured.'" >>Makefile ;;
+node)
+	cat >>Makefile <<'EOF'
+install:
+	npm install
+
+lint:
+	npm run lint
+
+test:
+	npm test
+
+build:
+	npm run build
+
+ci: install lint test build
+EOF
+	;;
+python)
+	cat >>Makefile <<'EOF'
+install:
+	pip install -e .[dev,test]
+
+lint:
+	ruff check .
+
+test:
+	pytest
+
+build:
+	python -m build
+
+ci: install lint test build
+EOF
+	;;
+go)
+	cat >>Makefile <<'EOF'
+install:
+	go mod download
+
+lint:
+	go vet ./...
+
+test:
+	go test ./...
+
+build:
+	go build ./...
+
+ci: install lint test build
+EOF
+	;;
+*)
+	cat >>Makefile <<'EOF'
+install:
+	@echo 'No install command configured.'
+
+lint:
+	@echo 'No lint command configured.'
+
+test:
+	@echo 'No test command configured.'
+
+build:
+	@echo 'No build command configured.'
+
+ci: install lint test build
+EOF
+	;;
 esac
-# ... (lint, test, build, ci targets follow same pattern)
 
 echo "==> Bootstrap complete. Initial commit:"
 git add .
