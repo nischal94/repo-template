@@ -1,0 +1,48 @@
+name: osv-scanner
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 12 * * 1"
+permissions:
+  contents: read
+  security-events: write
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  osv-scanner:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Install osv-scanner
+        run: |
+          set -euo pipefail
+          OSV_VERSION="2.0.2"
+          curl -fsSL "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64" -o /usr/local/bin/osv-scanner
+          chmod +x /usr/local/bin/osv-scanner
+          osv-scanner --version
+      - name: Run osv-scanner
+        run: |
+          set -euo pipefail
+          # osv-scanner v2 exit codes (verified empirically against v2.0.2):
+          #   0   = scanned, no vulnerabilities found
+          #   1   = vulnerabilities found
+          #   128 = no package sources found in the scanned dir
+          # The .github repo (and other docs/yaml-only repos) will always
+          # exit 128 because they have no manifests. Treat 128 as success.
+          set +e
+          osv-scanner scan source --recursive ./
+          rc=$?
+          set -e
+          case "$rc" in
+            0)   echo "osv-scanner: clean (no vulnerabilities found in scanned manifests)" ;;
+            128) echo "osv-scanner: no package manifests in this repo; nothing to scan." ;;
+            1)   echo "::error::osv-scanner found vulnerabilities"; exit 1 ;;
+            *)   echo "::error::osv-scanner failed unexpectedly with exit $rc"; exit "$rc" ;;
+          esac
