@@ -1,0 +1,40 @@
+# github/licensed v4 configuration — synced into every repo as
+# `.licensed.yml` by scaffold-on-poll.yml.
+#
+# Reference: https://github.com/github/licensed/blob/main/docs/configuration.md
+# Spec reference: spec v0.5 §3.5 (license allowlist + override mechanism).
+
+# Per-ecosystem detection. The license-check workflow in each repo
+# enables only the sources matching that repo's actual languages
+# (license-check.yml does the runtime detection).
+sources:
+  npm: true
+  pip: true
+  go: true
+  cargo: true
+  bundler: true
+
+# 9 default-allowed licenses (per spec v0.5 §3.5).
+# Anything outside this list blocks merge until allowlisted in
+# LICENSE-OVERRIDE.md or until the dep is swapped.
+allowed:
+  - mit
+  - apache-2.0
+  - bsd-2-clause
+  - bsd-3-clause
+  - isc
+  - 0bsd
+  - unlicense
+  - mpl-2.0
+  - cc0-1.0
+
+# Per-repo overrides merged in from the repo's own LICENSE-OVERRIDE.md
+# at runtime. This `reviewed:` block stays empty in the canonical
+# config; populating happens in each repo as needed.
+reviewed: {}
+
+# Test/dev-only deps that cannot affect distribution. Excluded from
+# license enforcement entirely.
+ignored:
+  npm:
+    - "@types/*"

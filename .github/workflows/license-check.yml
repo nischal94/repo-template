@@ -1,0 +1,72 @@
+name: license-check
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  license-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Detect repo languages
+        id: detect
+        run: |
+          set -euo pipefail
+          # Decide if this repo has anything for licensed to scan.
+          # If none of the supported manifests exist, skip cleanly.
+          NEEDED=0
+          for f in package.json pyproject.toml requirements.txt go.mod Cargo.toml Gemfile; do
+            if [ -f "$f" ]; then NEEDED=1; break; fi
+          done
+          echo "needed=$NEEDED" >> "$GITHUB_OUTPUT"
+      - name: Skip if no manifests
+        if: steps.detect.outputs.needed == '0'
+        run: echo "No supported manifests found; license-check is a no-op for this repo."
+      - uses: ruby/setup-ruby@af848b40be8bb463a751551a1180d74782ba8a72 # v1.196.0
+        if: steps.detect.outputs.needed == '1'
+        with:
+          ruby-version: "3.2"
+      - name: Install github/licensed
+        if: steps.detect.outputs.needed == '1'
+        run: gem install licensed -v 4.4.0
+      - name: Merge LICENSE-OVERRIDE.md into licensed config
+        if: steps.detect.outputs.needed == '1'
+        run: |
+          set -euo pipefail
+          if [ -f .licensed.yml ]; then
+            cp .licensed.yml /tmp/licensed-base.yml
+          else
+            echo "::warning::No .licensed.yml in this repo; using policies default from nischal94/.github"
+            curl -fsSL https://raw.githubusercontent.com/nischal94/.github/main/policies/license-config.yml > /tmp/licensed-base.yml
+          fi
+          cp /tmp/licensed-base.yml .licensed.yml
+          if [ -f LICENSE-OVERRIDE.md ]; then
+            python3 - <<'PY'
+          import yaml, re
+          override = open("LICENSE-OVERRIDE.md").read()
+          with open(".licensed.yml") as f:
+              cfg = yaml.safe_load(f) or {}
+          cfg.setdefault("reviewed", {})
+          for line in override.splitlines():
+              m = re.match(r"-\s+`([^@]+)@([^`]+)`:\s+(\S+)\s+", line)
+              if m:
+                  pkg, ver, lic = m.group(1), m.group(2), m.group(3)
+                  cfg["reviewed"].setdefault("any", []).append(f"{pkg}@{ver}")
+          with open(".licensed.yml", "w") as f:
+              yaml.safe_dump(cfg, f)
+          PY
+          fi
+      - name: Run licensed
+        if: steps.detect.outputs.needed == '1'
+        run: |
+          licensed cache
+          licensed status

@@ -1,0 +1,28 @@
+name: pin-actions
+on:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  pin-actions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Verify all uses are SHA-pinned (slsa-framework excepted)
+        run: |
+          set -euo pipefail
+          BAD=$(grep -rE '^\s*-?\s*uses:\s+[^@]+@(v[0-9]|main|master|latest)' .github/workflows/ \
+            | grep -vE 'slsa-framework/' || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::Found tag-pinned actions (must be SHA-pinned per spec):"
+            echo "$BAD"
+            exit 1
+          fi
+          echo "All actions SHA-pinned (slsa-framework excepted per spec v0.5 §4.6)."
