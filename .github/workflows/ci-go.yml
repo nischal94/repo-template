@@ -1,0 +1,49 @@
+name: ci-go
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      applies: ${{ steps.check.outputs.applies }}
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - id: check
+        run: |
+          if [ -f .github/stacks.yml ] && yq '.stacks[] | select(.kind == "go")' .github/stacks.yml > /dev/null; then
+            echo "applies=true" >> "$GITHUB_OUTPUT"
+          elif [ -f go.mod ]; then
+            echo "applies=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "applies=false" >> "$GITHUB_OUTPUT"
+          fi
+  ci:
+    needs: detect
+    if: needs.detect.outputs.applies == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            proxy.golang.org:443
+            sum.golang.org:443
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            storage.googleapis.com:443
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+        with:
+          go-version-file: ".go-version"
+          cache: true
+      - name: Run ci-go.sh
+        run: bash .github/scripts/ci-go.sh

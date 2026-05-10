@@ -1,0 +1,67 @@
+name: ci-sql
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      applies: ${{ steps.check.outputs.applies }}
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - id: check
+        run: |
+          if [ -f .github/stacks.yml ] && yq '.stacks[] | select(.kind == "sql")' .github/stacks.yml > /dev/null; then
+            echo "applies=true" >> "$GITHUB_OUTPUT"
+          elif [ -d migrations ] || find . -maxdepth 3 -name "*.sql" -not -path "./.git/*" | head -1 | grep -q .; then
+            echo "applies=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "applies=false" >> "$GITHUB_OUTPUT"
+          fi
+  ci:
+    needs: detect
+    if: needs.detect.outputs.applies == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_USER: test
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: test
+      PGPASSWORD: test
+      PGDATABASE: test
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            registry.npmjs.org:443
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Install pgTAP tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client libtap-parser-sourcehandler-pgtap-perl
+      - name: Run ci-sql.sh
+        run: bash .github/scripts/ci-sql.sh

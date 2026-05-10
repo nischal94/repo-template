@@ -1,0 +1,50 @@
+name: ci-e2e
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      applies: ${{ steps.check.outputs.applies }}
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - id: check
+        run: |
+          if [ -f .github/stacks.yml ] && yq '.stacks[] | select(.kind == "e2e")' .github/stacks.yml > /dev/null; then
+            echo "applies=true" >> "$GITHUB_OUTPUT"
+          elif [ -f playwright.config.ts ] || [ -f playwright.config.js ] \
+               || [ -f cypress.config.ts ] || [ -f cypress.config.js ]; then
+            echo "applies=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "applies=false" >> "$GITHUB_OUTPUT"
+          fi
+  ci:
+    needs: detect
+    if: needs.detect.outputs.applies == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            registry.npmjs.org:443
+            playwright.azureedge.net:443
+            cdn.cypress.io:443
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.0.3
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+      - name: Run ci-e2e.sh
+        run: bash .github/scripts/ci-e2e.sh
