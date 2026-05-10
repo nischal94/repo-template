@@ -33,11 +33,15 @@ jobs:
       issues: write
       id-token: write
     steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           fetch-depth: 1
       - name: Run Claude Code
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@2703d6e89559c31037b8083eff3cc5ba56502f1e # v1.0.119
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
