@@ -67,7 +67,7 @@ It asks for project name, primary language (`node|python|go|shell|other`), and l
 
 - Initializes the toolchain (`npm init`, `python -m venv`, `go mod init`, etc.)
 - Removes language-profile workflows for languages you're not using (cleaner Actions tab)
-- Generates a `Makefile` wired to your stack's commands
+- Generates a `Makefile` with `.PHONY: install lint test build ci`. **Caveat ([#25](https://github.com/nischal94/repo-template/issues/25)):** only the `install:` target body is generated today; you'll need to fill in the bodies for `lint`/`test`/`build`/`ci` to match your stack's commands
 
 ### 3. Push the first commit
 
@@ -142,3 +142,5 @@ See [`docs/SECURITY-OPERATIONS.md §7`](SECURITY-OPERATIONS.md#7-tier-4-hardenin
 | Understand the design rationale | [`docs/specs/2026-05-09-enterprise-ci-template-design.md`](specs/2026-05-09-enterprise-ci-template-design.md) (currently v0.6) |
 | Pull in template updates later | [`docs/UPGRADING.md`](UPGRADING.md) |
 | Write a good PR description | The PR template (`.github/PULL_REQUEST_TEMPLATE.md`) — has inline guidance |
+
+> **Note on `docs/SECURITY-OPERATIONS.md`:** §5 (Dependabot grouping) and §7 (Tier 4 hardening) reflect the current model. **§2 (post-creation checklist) and §3 (manual branch protection) predate the Layer-1 + Layer-2 split** — the App now applies branch protection automatically per the canonical ruleset, and the manual UI clicks listed in §2.2/§2.3 are no longer required. A full sweep of SECURITY-OPERATIONS to align with the post-Phase-3 model is tracked as a separate follow-up.

@@ -8,10 +8,10 @@ This doc tells you how to pull in template updates manually, and which template 
 
 ## 1. Find which template version you started from
 
-Check `CHANGELOG.md` in your derived repo (if you copied it during creation) — the topmost dated entry is the template version you have. If you didn't copy `CHANGELOG.md`, check the creation date of your repo's `.github/workflows/gitleaks.yml` (or any other template-shipped workflow):
+Check `CHANGELOG.md` in your derived repo (if you copied it during creation) — the topmost dated entry is the template version you have. If you didn't copy `CHANGELOG.md`, check the creation date of a template-shipped workflow that's still in this template (Layer-1 workflows are delivered by the App, not the template, so use a Layer-2 file):
 
 ```bash
-git log --diff-filter=A --follow --format="%aI" .github/workflows/gitleaks.yml | tail -1
+git log --diff-filter=A --follow --format="%aI" .github/workflows/release.yml | tail -1
 ```
 
 Compare that date against the [template's `CHANGELOG.md`](../CHANGELOG.md) to find your version.
