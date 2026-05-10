@@ -1,0 +1,14 @@
+pre-commit:
+  parallel: true
+  commands:
+    lint:
+      glob: "*.{js,ts,jsx,tsx,py,go,sh}"
+      run: make lint || true
+    typecheck:
+      glob: "*.{ts,tsx,py}"
+      run: make typecheck || true
+
+pre-push:
+  commands:
+    test:
+      run: make test
