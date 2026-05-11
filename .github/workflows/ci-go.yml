@@ -36,6 +36,7 @@ jobs:
           allowed-endpoints: >
             proxy.golang.org:443
             sum.golang.org:443
+            vuln.go.dev:443
             github.com:443
             api.github.com:443
             objects.githubusercontent.com:443
