@@ -13,16 +13,25 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       applies: ${{ steps.check.outputs.applies }}
+      paths: ${{ steps.check.outputs.paths }}
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
       - id: check
         run: |
-          if [ -f .github/stacks.yml ] && yq '.stacks[] | select(.kind == "docs")' .github/stacks.yml > /dev/null; then
-            echo "applies=true" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [ -f .github/stacks.yml ]; then
+            paths_json=$(yq -o=json -I=0 '[.stacks[] | select(.kind == "docs") | (.path // ".") | select(. != "")] | unique' .github/stacks.yml)
+            if [ "$paths_json" = "[]" ]; then
+              echo "applies=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "applies=true" >> "$GITHUB_OUTPUT"
+              echo "paths=$paths_json" >> "$GITHUB_OUTPUT"
+            fi
           elif [ -f mkdocs.yml ] || [ -f docusaurus.config.ts ] || [ -f docusaurus.config.js ] || [ -d docs ]; then
             echo "applies=true" >> "$GITHUB_OUTPUT"
+            echo 'paths=["."]' >> "$GITHUB_OUTPUT"
           else
             echo "applies=false" >> "$GITHUB_OUTPUT"
           fi
@@ -45,5 +54,28 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
-      - name: Run ci-docs.sh
-        run: bash .github/scripts/ci-docs.sh
+      - name: Run ci-docs.sh per stack path
+        env:
+          PATHS_JSON: ${{ needs.detect.outputs.paths }}
+        run: |
+          set -uo pipefail
+          mapfile -t PATHS < <(jq -r '.[]' <<<"$PATHS_JSON")
+          if [ "${#PATHS[@]}" -eq 0 ]; then
+            echo "::error::ci-docs: paths output was empty"
+            exit 1
+          fi
+          FAILED=()
+          for p in "${PATHS[@]}"; do
+            echo "::group::ci-docs.sh at $p"
+            if (cd "$p" && bash "$GITHUB_WORKSPACE/.github/scripts/ci-docs.sh"); then
+              echo "::endgroup::"
+            else
+              echo "::endgroup::"
+              echo "::error::ci-docs.sh failed at path: $p"
+              FAILED+=("$p")
+            fi
+          done
+          if [ "${#FAILED[@]}" -gt 0 ]; then
+            echo "::error::ci-docs failed at ${#FAILED[@]} path(s): ${FAILED[*]}"
+            exit 1
+          fi
