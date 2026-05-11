@@ -1,3 +1,15 @@
-# Default reviewer for everything in this repo.
-# See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/customizing-your-repository/about-code-owners
-*       @nischal94
+# Intentionally empty.
+#
+# Solo-account context: `* @nischal94` combined with the canonical
+# ruleset's `require_code_owner_review: true` left every PR
+# structurally unmergeable — GitHub forbids approving your own PR
+# and there is no second code-owner to provide approval. PRs sat
+# at mergeStateStatus: BLOCKED indefinitely with green CI.
+#
+# When a second human or machine code-owner is added to this
+# account, restore path entries here AND flip
+# `require_code_owner_review` back to `true` in
+# nischal94/.github's policies/canonical-ruleset.json.
+#
+# See https://github.com/nischal94/.github/blob/main/docs/POLICIES.md
+# for the merge-rule context.
