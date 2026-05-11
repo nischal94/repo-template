@@ -8,6 +8,44 @@
 
 ## Changelog
 
+### Errata (post-v0.6, 2026-05-11)
+
+The body of this spec is frozen as of v0.6. The following claims have
+since been overtaken by implementation experience. Authoritative current
+state lives in the linked sources; the spec body is preserved for
+historical fidelity.
+
+- **§7 "No `pull_request_target` workflows ever in this repo"** — the
+  template now ships `dependabot-automerge.yml` with `on: pull_request_target`.
+  The use is hardened (actor-gated on `github.actor == 'dependabot[bot]'`,
+  no PR-head checkout, only `gh pr merge --auto`). See
+  [README.md → `pull_request_target` usage](../../README.md#pull_request_target-usage)
+  for the safe-pattern rationale.
+
+- **§4 "1 approving review required on `main`"** — both
+  `required_approving_review_count` and `require_code_owner_review` are
+  now `0` / `false` respectively on solo-account repos. The original
+  values created a self-review trap (CODEOWNERS = `* @nischal94`, GitHub
+  forbids approving your own PR, every PR sat at `mergeStateStatus: BLOCKED`
+  indefinitely). Current canonical ruleset:
+  [`policies/canonical-ruleset.json`](https://github.com/nischal94/.github/blob/main/policies/canonical-ruleset.json).
+  Rationale: [POLICIES.md → Pull request rules](https://github.com/nischal94/.github/blob/main/docs/POLICIES.md#pull-request-rules).
+
+- **§4 "9 Layer 1 universal workflows"** — actually 8 since [PR #7 on
+  `.github`](https://github.com/nischal94/.github/pull/7) removed CodeQL.
+  Current set: `gitleaks`, `dependency-review`, `osv-scanner`,
+  `actionlint`, `pin-actions`, `pr-title`, `license-check`, `scorecard`.
+
+- **§4 merge workflow** — `gh pr merge --admin` is no longer the
+  documented path. Use the `gh-merge` shell function (or `gh pr merge
+  --auto --squash --delete-branch` for hands-off auto-merge). See
+  [POLICIES.md → Merging PRs](https://github.com/nischal94/.github/blob/main/docs/POLICIES.md#merging-prs--use-gh-merge-not-gh-pr-merge).
+
+When a future revision (v0.7+) supersedes this spec, the new version
+should restate any of these that are still true in its own body, and
+this errata block can be removed from this file (the spec at v0.6
+remains frozen).
+
 ### v0.6 — 2026-05-10
 
 Phase 2 implementation complete. End-to-end lifecycle verified on a
