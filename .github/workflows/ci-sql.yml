@@ -15,6 +15,8 @@ jobs:
       applies: ${{ steps.check.outputs.applies }}
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
       - id: check
         run: |
           if [ -f .github/stacks.yml ] && yq '.stacks[] | select(.kind == "sql")' .github/stacks.yml > /dev/null; then
@@ -63,6 +65,8 @@ jobs:
             archive.ubuntu.com:80
             security.ubuntu.com:80
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
       - name: Install pgTAP tooling
         run: |
           sudo apt-get update
