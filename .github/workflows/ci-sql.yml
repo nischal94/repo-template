@@ -13,16 +13,25 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       applies: ${{ steps.check.outputs.applies }}
+      paths: ${{ steps.check.outputs.paths }}
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
       - id: check
         run: |
-          if [ -f .github/stacks.yml ] && yq '.stacks[] | select(.kind == "sql")' .github/stacks.yml > /dev/null; then
-            echo "applies=true" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [ -f .github/stacks.yml ]; then
+            paths_json=$(yq -o=json -I=0 '[.stacks[] | select(.kind == "sql") | (.path // ".") | select(. != "")] | unique' .github/stacks.yml)
+            if [ "$paths_json" = "[]" ]; then
+              echo "applies=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "applies=true" >> "$GITHUB_OUTPUT"
+              echo "paths=$paths_json" >> "$GITHUB_OUTPUT"
+            fi
           elif [ -d migrations ] || find . -maxdepth 3 -name "*.sql" -not -path "./.git/*" | head -1 | grep -q .; then
             echo "applies=true" >> "$GITHUB_OUTPUT"
+            echo 'paths=["."]' >> "$GITHUB_OUTPUT"
           else
             echo "applies=false" >> "$GITHUB_OUTPUT"
           fi
@@ -31,6 +40,11 @@ jobs:
     if: needs.detect.outputs.applies == 'true'
     runs-on: ubuntu-latest
     services:
+      # ONE Postgres instance per job, shared across all stack paths.
+      # Most monorepos run a single backing Postgres in production, so
+      # sharing the test DB matches the deployment shape. If a project
+      # genuinely needs Postgres-per-service for testing (rare), split
+      # into separate repos.
       postgres:
         image: postgres:16
         env:
@@ -71,5 +85,34 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client libtap-parser-sourcehandler-pgtap-perl
-      - name: Run ci-sql.sh
-        run: bash .github/scripts/ci-sql.sh
+      - name: Run ci-sql.sh per stack path
+        # Postgres service is shared across all paths (see services:
+        # comment above). Each path's migrations apply against the
+        # same DB sequentially in the order listed in stacks.yml.
+        # If migrations between services conflict (e.g., two services
+        # both define a `users` table), the run will fail — that's a
+        # design signal that the services should be split.
+        env:
+          PATHS_JSON: ${{ needs.detect.outputs.paths }}
+        run: |
+          set -uo pipefail
+          mapfile -t PATHS < <(jq -r '.[]' <<<"$PATHS_JSON")
+          if [ "${#PATHS[@]}" -eq 0 ]; then
+            echo "::error::ci-sql: paths output was empty"
+            exit 1
+          fi
+          FAILED=()
+          for p in "${PATHS[@]}"; do
+            echo "::group::ci-sql.sh at $p"
+            if (cd "$p" && bash "$GITHUB_WORKSPACE/.github/scripts/ci-sql.sh"); then
+              echo "::endgroup::"
+            else
+              echo "::endgroup::"
+              echo "::error::ci-sql.sh failed at path: $p"
+              FAILED+=("$p")
+            fi
+          done
+          if [ "${#FAILED[@]}" -gt 0 ]; then
+            echo "::error::ci-sql failed at ${#FAILED[@]} path(s): ${FAILED[*]}"
+            exit 1
+          fi
