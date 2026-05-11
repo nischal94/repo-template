@@ -29,7 +29,10 @@ python)
   if [ ! -f pyproject.toml ]; then
     python -m venv .venv
     .venv/bin/python -m pip install uv
-    .venv/bin/uv init .
+    # --vcs none: uv init defaults to running `git init` inside the
+    # project folder. That bypasses the confirmation gate at the end of
+    # this script and violates the user's Git-safety SCAR. Force it off.
+    .venv/bin/uv init . --vcs none
   fi
   ;;
 go) test -f go.mod || go mod init "github.com/nischal94/$PROJECT_NAME" ;;
@@ -138,7 +141,7 @@ echo "==> Bootstrap complete."
 #   3. .git/ does not exist (truly greenfield)   → ASK before git init + commit.
 # In all three, the user can decline and finish the commit themselves.
 
-if [ -d .git ]; then
+if git rev-parse --git-dir > /dev/null 2>&1; then
 	# .git/ already exists. Check whether there's anything to commit.
 	if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
 		echo "==> Working tree clean; nothing to commit."
