@@ -13,17 +13,26 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       applies: ${{ steps.check.outputs.applies }}
+      paths: ${{ steps.check.outputs.paths }}
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
       - id: check
         run: |
-          if [ -f .github/stacks.yml ] && yq '.stacks[] | select(.kind == "e2e")' .github/stacks.yml > /dev/null; then
-            echo "applies=true" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [ -f .github/stacks.yml ]; then
+            paths_json=$(yq -o=json -I=0 '[.stacks[] | select(.kind == "e2e") | (.path // ".") | select(. != "")] | unique' .github/stacks.yml)
+            if [ "$paths_json" = "[]" ]; then
+              echo "applies=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "applies=true" >> "$GITHUB_OUTPUT"
+              echo "paths=$paths_json" >> "$GITHUB_OUTPUT"
+            fi
           elif [ -f playwright.config.ts ] || [ -f playwright.config.js ] \
                || [ -f cypress.config.ts ] || [ -f cypress.config.js ]; then
             echo "applies=true" >> "$GITHUB_OUTPUT"
+            echo 'paths=["."]' >> "$GITHUB_OUTPUT"
           else
             echo "applies=false" >> "$GITHUB_OUTPUT"
           fi
@@ -51,9 +60,69 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
+      # Same workspace-relative .nvmrc + lockfile-aware cache pattern as
+      # ci-node (PR #56's lessons applied here too).
+      - id: nvmrc
+        env:
+          PATHS_JSON: ${{ needs.detect.outputs.paths }}
+        run: |
+          set -euo pipefail
+          FIRST_PATH=$(jq -r '.[0] // "."' <<<"$PATHS_JSON")
+          EFFECTIVE_NVMRC="$GITHUB_WORKSPACE/.nvmrc.effective"
+          if [ -f .nvmrc ]; then
+            cp .nvmrc "$EFFECTIVE_NVMRC"
+          elif [ -f "$FIRST_PATH/.nvmrc" ]; then
+            cp "$FIRST_PATH/.nvmrc" "$EFFECTIVE_NVMRC"
+          else
+            echo "20" > "$EFFECTIVE_NVMRC"
+          fi
+          if [ -f "$FIRST_PATH/package-lock.json" ]; then
+            echo "manager=npm" >> "$GITHUB_OUTPUT"
+            echo "lockfile_path=$FIRST_PATH/package-lock.json" >> "$GITHUB_OUTPUT"
+          elif [ -f "$FIRST_PATH/npm-shrinkwrap.json" ]; then
+            echo "manager=npm" >> "$GITHUB_OUTPUT"
+            echo "lockfile_path=$FIRST_PATH/npm-shrinkwrap.json" >> "$GITHUB_OUTPUT"
+          elif [ -f "$FIRST_PATH/pnpm-lock.yaml" ]; then
+            echo "manager=pnpm" >> "$GITHUB_OUTPUT"
+            echo "lockfile_path=$FIRST_PATH/pnpm-lock.yaml" >> "$GITHUB_OUTPUT"
+          elif [ -f "$FIRST_PATH/yarn.lock" ]; then
+            echo "manager=yarn" >> "$GITHUB_OUTPUT"
+            echo "lockfile_path=$FIRST_PATH/yarn.lock" >> "$GITHUB_OUTPUT"
+          else
+            echo "manager=" >> "$GITHUB_OUTPUT"
+            echo "lockfile_path=" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version-file: ".nvmrc"
-          cache: npm
-      - name: Run ci-e2e.sh
-        run: bash .github/scripts/ci-e2e.sh
+          node-version-file: ".nvmrc.effective"
+          cache: ${{ steps.nvmrc.outputs.manager }}
+          cache-dependency-path: ${{ steps.nvmrc.outputs.lockfile_path }}
+      - name: Run ci-e2e.sh per stack path
+        # ci-e2e.sh runs npx playwright install --with-deps as its first
+        # step inside each path. That's idempotent across iterations
+        # (Playwright caches browsers after first install), so per-path
+        # iteration adds minimal extra time.
+        env:
+          PATHS_JSON: ${{ needs.detect.outputs.paths }}
+        run: |
+          set -uo pipefail
+          mapfile -t PATHS < <(jq -r '.[]' <<<"$PATHS_JSON")
+          if [ "${#PATHS[@]}" -eq 0 ]; then
+            echo "::error::ci-e2e: paths output was empty"
+            exit 1
+          fi
+          FAILED=()
+          for p in "${PATHS[@]}"; do
+            echo "::group::ci-e2e.sh at $p"
+            if (cd "$p" && bash "$GITHUB_WORKSPACE/.github/scripts/ci-e2e.sh"); then
+              echo "::endgroup::"
+            else
+              echo "::endgroup::"
+              echo "::error::ci-e2e.sh failed at path: $p"
+              FAILED+=("$p")
+            fi
+          done
+          if [ "${#FAILED[@]}" -gt 0 ]; then
+            echo "::error::ci-e2e failed at ${#FAILED[@]} path(s): ${FAILED[*]}"
+            exit 1
+          fi
