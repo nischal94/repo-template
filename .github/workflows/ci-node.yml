@@ -13,20 +13,39 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       applies: ${{ steps.check.outputs.applies }}
+      paths: ${{ steps.check.outputs.paths }}
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
+      # Emit a JSON array of paths where this stack applies.
+      # - stacks.yml present: every entry with kind==node, defaulting
+      #   to "." if no path: field.
+      # - stacks.yml absent: file-based detect at the repo root only;
+      #   if package.json present, paths=["."].
+      # - Neither: applies=false.
       - id: check
         run: |
+          set -euo pipefail
           if [ -f .github/stacks.yml ]; then
-            if yq '.stacks[] | select(.kind == "node")' .github/stacks.yml > /dev/null; then
-              echo "applies=true" >> "$GITHUB_OUTPUT"
-            else
+            # Filter: kind==node + non-empty path. Defaults missing path
+            # to "." and rejects path:"" entries (Tier 2 review #3).
+            # `unique` de-dupes accidental double-entries.
+            # -I=0 forces compact (single-line) JSON. mikefarah yq v4
+            # defaults to indent=2 multi-line, which would be truncated
+            # by GITHUB_OUTPUT (only first line captured). CodeRabbit
+            # caught this — without -I=0 the entire downstream chain
+            # silently breaks.
+            paths_json=$(yq -o=json -I=0 '[.stacks[] | select(.kind == "node") | (.path // ".") | select(. != "")] | unique' .github/stacks.yml)
+            if [ "$paths_json" = "[]" ]; then
               echo "applies=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "applies=true" >> "$GITHUB_OUTPUT"
+              echo "paths=$paths_json" >> "$GITHUB_OUTPUT"
             fi
           elif [ -f package.json ]; then
             echo "applies=true" >> "$GITHUB_OUTPUT"
+            echo 'paths=["."]' >> "$GITHUB_OUTPUT"
           else
             echo "applies=false" >> "$GITHUB_OUTPUT"
           fi
@@ -48,26 +67,99 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
-      # Detect which lockfile (if any) is committed. actions/setup-node's
-      # `cache:` input hard-fails when set to a manager whose lockfile is
-      # absent, so greenfield Node projects (no lockfile yet committed)
-      # would fail their first CI run with "Dependencies lock file is not
-      # found". Setting `cache:` only when a matching lockfile exists is
-      # the documented escape hatch.
-      - id: lockfile
+      # In monorepo mode (stacks.yml present), .nvmrc may live at the
+      # repo root OR at the first stack's path. setup-node is a
+      # job-level action — runs once. Use root .nvmrc if present, else
+      # the first stack path's .nvmrc, else default to '20'. Document
+      # the constraint: a monorepo with multiple per-path .nvmrc files
+      # gets a single Node version applied to all paths. If you need
+      # different Node versions per service, split into separate repos.
+      - id: nvmrc
+        # Pass paths via env: rather than ${{ }} interpolation in the
+        # run: body. ${{ }} splice-substitutes at workflow-parse time,
+        # BEFORE the shell sees it. A path with a single-quote could
+        # break out of the quoting and execute arbitrary commands on
+        # the runner. CodeRabbit caught this script-injection vector.
+        env:
+          PATHS_JSON: ${{ needs.detect.outputs.paths }}
         run: |
-          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+          set -euo pipefail
+          FIRST_PATH=$(jq -r '.[0] // "."' <<<"$PATHS_JSON")
+
+          # IMPORTANT: actions/setup-node@v4 joins node-version-file with
+          # $GITHUB_WORKSPACE via path.join (not path.resolve). An absolute
+          # path like /tmp/.nvmrc.effective becomes $GITHUB_WORKSPACE/tmp/...
+          # which doesn't exist. Write the effective .nvmrc INSIDE the
+          # workspace so the join resolves correctly. Tier 2 review (PR #56)
+          # caught this — would have broken every Node CI run on every repo.
+          EFFECTIVE_NVMRC="$GITHUB_WORKSPACE/.nvmrc.effective"
+          if [ -f .nvmrc ]; then
+            cp .nvmrc "$EFFECTIVE_NVMRC"
+          elif [ -f "$FIRST_PATH/.nvmrc" ]; then
+            cp "$FIRST_PATH/.nvmrc" "$EFFECTIVE_NVMRC"
+          else
+            echo "20" > "$EFFECTIVE_NVMRC"
+          fi
+
+          # Detect the FIRST stack path's lockfile and emit the matching
+          # lockfile_path alongside manager. Hardcoding package-lock.json
+          # would break pnpm/yarn monorepos (Tier 2 review I1).
+          if [ -f "$FIRST_PATH/package-lock.json" ]; then
             echo "manager=npm" >> "$GITHUB_OUTPUT"
-          elif [ -f pnpm-lock.yaml ]; then
+            echo "lockfile_path=$FIRST_PATH/package-lock.json" >> "$GITHUB_OUTPUT"
+          elif [ -f "$FIRST_PATH/npm-shrinkwrap.json" ]; then
+            echo "manager=npm" >> "$GITHUB_OUTPUT"
+            echo "lockfile_path=$FIRST_PATH/npm-shrinkwrap.json" >> "$GITHUB_OUTPUT"
+          elif [ -f "$FIRST_PATH/pnpm-lock.yaml" ]; then
             echo "manager=pnpm" >> "$GITHUB_OUTPUT"
-          elif [ -f yarn.lock ]; then
+            echo "lockfile_path=$FIRST_PATH/pnpm-lock.yaml" >> "$GITHUB_OUTPUT"
+          elif [ -f "$FIRST_PATH/yarn.lock" ]; then
             echo "manager=yarn" >> "$GITHUB_OUTPUT"
+            echo "lockfile_path=$FIRST_PATH/yarn.lock" >> "$GITHUB_OUTPUT"
           else
             echo "manager=" >> "$GITHUB_OUTPUT"
+            echo "lockfile_path=" >> "$GITHUB_OUTPUT"
           fi
+          echo "first_path=$FIRST_PATH" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version-file: ".nvmrc"
-          cache: ${{ steps.lockfile.outputs.manager }}
-      - name: Run ci-node.sh
-        run: bash .github/scripts/ci-node.sh
+          node-version-file: ".nvmrc.effective"
+          cache: ${{ steps.nvmrc.outputs.manager }}
+          cache-dependency-path: ${{ steps.nvmrc.outputs.lockfile_path }}
+      # Iterate stack paths; cd into each and run ci-node.sh. Collect
+      # failures into a list so all paths run, then exit non-zero at the
+      # end if any failed (rather than fail-fast on the first failure).
+      # This matches the intent of Layer 2 being advisory — surface ALL
+      # broken paths in one CI run.
+      - name: Run ci-node.sh per stack path
+        # Same env-vs-interpolation pattern as the nvmrc step above
+        # for script-injection safety.
+        env:
+          PATHS_JSON: ${{ needs.detect.outputs.paths }}
+        run: |
+          set -uo pipefail
+          mapfile -t PATHS < <(jq -r '.[]' <<<"$PATHS_JSON")
+          # Defensive guard: detect step's `applies` gate should
+          # prevent this from being reached with empty PATHS, but if
+          # something upstream silently emits an empty paths output
+          # (yq error, malformed JSON), the job would otherwise exit
+          # 0 with no work done — false-green CI. Tier 2 review #2.
+          if [ "${#PATHS[@]}" -eq 0 ]; then
+            echo "::error::ci-node: paths output was empty after parse — refusing to silently skip"
+            exit 1
+          fi
+          FAILED=()
+          for p in "${PATHS[@]}"; do
+            echo "::group::ci-node.sh at $p"
+            if (cd "$p" && bash "$GITHUB_WORKSPACE/.github/scripts/ci-node.sh"); then
+              echo "::endgroup::"
+            else
+              echo "::endgroup::"
+              echo "::error::ci-node.sh failed at path: $p"
+              FAILED+=("$p")
+            fi
+          done
+          if [ "${#FAILED[@]}" -gt 0 ]; then
+            echo "::error::ci-node failed at ${#FAILED[@]} path(s): ${FAILED[*]}"
+            exit 1
+          fi
