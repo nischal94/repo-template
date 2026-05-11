@@ -28,7 +28,10 @@ jobs:
         run: |
           set -euo pipefail
           if [ -f .github/stacks.yml ]; then
-            paths_json=$(yq -o=json '[.stacks[] | select(.kind == "node") | (.path // ".")]' .github/stacks.yml)
+            # Filter: kind==node + non-empty path. Defaults missing path
+            # to "." and rejects path:"" entries (Tier 2 review #3).
+            # `unique` de-dupes accidental double-entries.
+            paths_json=$(yq -o=json '[.stacks[] | select(.kind == "node") | (.path // ".") | select(. != "")] | unique' .github/stacks.yml)
             if [ "$paths_json" = "[]" ]; then
               echo "applies=false" >> "$GITHUB_OUTPUT"
             else
@@ -71,30 +74,47 @@ jobs:
           set -euo pipefail
           PATHS_JSON='${{ needs.detect.outputs.paths }}'
           FIRST_PATH=$(echo "$PATHS_JSON" | jq -r '.[0] // "."')
+
+          # IMPORTANT: actions/setup-node@v4 joins node-version-file with
+          # $GITHUB_WORKSPACE via path.join (not path.resolve). An absolute
+          # path like /tmp/.nvmrc.effective becomes $GITHUB_WORKSPACE/tmp/...
+          # which doesn't exist. Write the effective .nvmrc INSIDE the
+          # workspace so the join resolves correctly. Tier 2 review (PR #56)
+          # caught this — would have broken every Node CI run on every repo.
+          EFFECTIVE_NVMRC="$GITHUB_WORKSPACE/.nvmrc.effective"
           if [ -f .nvmrc ]; then
-            cp .nvmrc /tmp/.nvmrc.effective
+            cp .nvmrc "$EFFECTIVE_NVMRC"
           elif [ -f "$FIRST_PATH/.nvmrc" ]; then
-            cp "$FIRST_PATH/.nvmrc" /tmp/.nvmrc.effective
+            cp "$FIRST_PATH/.nvmrc" "$EFFECTIVE_NVMRC"
           else
-            echo "20" > /tmp/.nvmrc.effective
+            echo "20" > "$EFFECTIVE_NVMRC"
           fi
-          # Pre-create the lockfile/manager detection for THIS first
-          # path so setup-node's cache: works for that path's lockfile.
-          if [ -f "$FIRST_PATH/package-lock.json" ] || [ -f "$FIRST_PATH/npm-shrinkwrap.json" ]; then
+
+          # Detect the FIRST stack path's lockfile and emit the matching
+          # lockfile_path alongside manager. Hardcoding package-lock.json
+          # would break pnpm/yarn monorepos (Tier 2 review I1).
+          if [ -f "$FIRST_PATH/package-lock.json" ]; then
             echo "manager=npm" >> "$GITHUB_OUTPUT"
+            echo "lockfile_path=$FIRST_PATH/package-lock.json" >> "$GITHUB_OUTPUT"
+          elif [ -f "$FIRST_PATH/npm-shrinkwrap.json" ]; then
+            echo "manager=npm" >> "$GITHUB_OUTPUT"
+            echo "lockfile_path=$FIRST_PATH/npm-shrinkwrap.json" >> "$GITHUB_OUTPUT"
           elif [ -f "$FIRST_PATH/pnpm-lock.yaml" ]; then
             echo "manager=pnpm" >> "$GITHUB_OUTPUT"
+            echo "lockfile_path=$FIRST_PATH/pnpm-lock.yaml" >> "$GITHUB_OUTPUT"
           elif [ -f "$FIRST_PATH/yarn.lock" ]; then
             echo "manager=yarn" >> "$GITHUB_OUTPUT"
+            echo "lockfile_path=$FIRST_PATH/yarn.lock" >> "$GITHUB_OUTPUT"
           else
             echo "manager=" >> "$GITHUB_OUTPUT"
+            echo "lockfile_path=" >> "$GITHUB_OUTPUT"
           fi
           echo "first_path=$FIRST_PATH" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version-file: "/tmp/.nvmrc.effective"
+          node-version-file: ".nvmrc.effective"
           cache: ${{ steps.nvmrc.outputs.manager }}
-          cache-dependency-path: ${{ steps.nvmrc.outputs.first_path }}/package-lock.json
+          cache-dependency-path: ${{ steps.nvmrc.outputs.lockfile_path }}
       # Iterate stack paths; cd into each and run ci-node.sh. Collect
       # failures into a list so all paths run, then exit non-zero at the
       # end if any failed (rather than fail-fast on the first failure).
@@ -105,6 +125,15 @@ jobs:
           set -uo pipefail
           PATHS_JSON='${{ needs.detect.outputs.paths }}'
           mapfile -t PATHS < <(echo "$PATHS_JSON" | jq -r '.[]')
+          # Defensive guard: detect step's `applies` gate should
+          # prevent this from being reached with empty PATHS, but if
+          # something upstream silently emits an empty paths output
+          # (yq error, malformed JSON), the job would otherwise exit
+          # 0 with no work done — false-green CI. Tier 2 review #2.
+          if [ "${#PATHS[@]}" -eq 0 ]; then
+            echo "::error::ci-node: paths output was empty after parse — refusing to silently skip"
+            exit 1
+          fi
           FAILED=()
           for p in "${PATHS[@]}"; do
             echo "::group::ci-node.sh at $p"
