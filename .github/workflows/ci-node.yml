@@ -31,7 +31,12 @@ jobs:
             # Filter: kind==node + non-empty path. Defaults missing path
             # to "." and rejects path:"" entries (Tier 2 review #3).
             # `unique` de-dupes accidental double-entries.
-            paths_json=$(yq -o=json '[.stacks[] | select(.kind == "node") | (.path // ".") | select(. != "")] | unique' .github/stacks.yml)
+            # -I=0 forces compact (single-line) JSON. mikefarah yq v4
+            # defaults to indent=2 multi-line, which would be truncated
+            # by GITHUB_OUTPUT (only first line captured). CodeRabbit
+            # caught this — without -I=0 the entire downstream chain
+            # silently breaks.
+            paths_json=$(yq -o=json -I=0 '[.stacks[] | select(.kind == "node") | (.path // ".") | select(. != "")] | unique' .github/stacks.yml)
             if [ "$paths_json" = "[]" ]; then
               echo "applies=false" >> "$GITHUB_OUTPUT"
             else
@@ -70,10 +75,16 @@ jobs:
       # gets a single Node version applied to all paths. If you need
       # different Node versions per service, split into separate repos.
       - id: nvmrc
+        # Pass paths via env: rather than ${{ }} interpolation in the
+        # run: body. ${{ }} splice-substitutes at workflow-parse time,
+        # BEFORE the shell sees it. A path with a single-quote could
+        # break out of the quoting and execute arbitrary commands on
+        # the runner. CodeRabbit caught this script-injection vector.
+        env:
+          PATHS_JSON: ${{ needs.detect.outputs.paths }}
         run: |
           set -euo pipefail
-          PATHS_JSON='${{ needs.detect.outputs.paths }}'
-          FIRST_PATH=$(echo "$PATHS_JSON" | jq -r '.[0] // "."')
+          FIRST_PATH=$(jq -r '.[0] // "."' <<<"$PATHS_JSON")
 
           # IMPORTANT: actions/setup-node@v4 joins node-version-file with
           # $GITHUB_WORKSPACE via path.join (not path.resolve). An absolute
@@ -121,10 +132,13 @@ jobs:
       # This matches the intent of Layer 2 being advisory — surface ALL
       # broken paths in one CI run.
       - name: Run ci-node.sh per stack path
+        # Same env-vs-interpolation pattern as the nvmrc step above
+        # for script-injection safety.
+        env:
+          PATHS_JSON: ${{ needs.detect.outputs.paths }}
         run: |
           set -uo pipefail
-          PATHS_JSON='${{ needs.detect.outputs.paths }}'
-          mapfile -t PATHS < <(echo "$PATHS_JSON" | jq -r '.[]')
+          mapfile -t PATHS < <(jq -r '.[]' <<<"$PATHS_JSON")
           # Defensive guard: detect step's `applies` gate should
           # prevent this from being reached with empty PATHS, but if
           # something upstream silently emits an empty paths output
