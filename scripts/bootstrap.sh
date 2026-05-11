@@ -21,10 +21,15 @@ python)
   # if-then form so set -e aborts loudly on venv/pip/uv failures.
   # `test -f X || { A && B && C; }` parses correctly but POSIX disables
   # set -e for the entire || RHS, so a mid-chain failure passes silently.
+  #
+  # `python -m venv .venv` does NOT alter $PATH — plain `pip install` would
+  # still resolve to the system pip and install uv globally (or fail on
+  # locked-down systems). Address the venv's interpreter directly so uv
+  # lands inside .venv and `uv init` runs against it.
   if [ ! -f pyproject.toml ]; then
     python -m venv .venv
-    pip install uv
-    uv init .
+    .venv/bin/python -m pip install uv
+    .venv/bin/uv init .
   fi
   ;;
 go) test -f go.mod || go mod init "github.com/nischal94/$PROJECT_NAME" ;;
