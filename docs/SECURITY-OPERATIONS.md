@@ -50,7 +50,7 @@ After creating a new repo from this template, most setup is automated. The `nisc
 ### 2.2 Layer-1 enrollment
 **Required for branch protection + universal security workflows.** Edit [`SCAFFOLD_ALLOWLIST` in `nischal94/.github`'s `scaffold-on-poll.yml`](https://github.com/nischal94/.github/blob/main/.github/workflows/scaffold-on-poll.yml#L51) to add your repo's full name, open a PR there, merge.
 
-Within ~5 minutes the App opens an auto-PR on your repo with the 8 Layer-1 workflows + the `.scaffolded-by-nischal94-policy` marker file. Merge it. On the next 5-min cron tick, `enforce-on-poll` applies the canonical ruleset to your `main` automatically.
+Within ~15 minutes the App opens an auto-PR on your repo with the 8 Layer-1 workflows + the `.scaffolded-by-nischal94-policy` marker file. Merge it. On the next 15-min cron tick, `enforce-on-poll` applies the canonical ruleset to your `main` automatically.
 
 After enrollment, **do not** create a classic branch protection rule via Settings → Branches; the canonical ruleset is the single source of truth and a duplicate classic rule will cause check-name mismatches that deadlock PRs.
 
@@ -104,7 +104,7 @@ What's enforced (full detail in [`POLICIES.md`](https://github.com/nischal94/.gi
 
 **Solo-account note:** `required_approving_review_count` is set to `0` because GitHub forbids approving your own PR; on a single-identity account a non-zero count would deadlock all merges. When taking on collaborators, edit `policies/canonical-ruleset.json` → `1` and merge — drift-audit propagates the change to all enrolled repos within a week, or run `force-sync.yml` for immediate.
 
-**To modify the ruleset for all enrolled repos:** edit `policies/canonical-ruleset.json` on `nischal94/.github`, open a PR, merge. The next `enforce-on-poll` cron tick (`*/5` min) re-applies. To force immediate propagation, dispatch `force-sync.yml` manually with `target=all`.
+**To modify the ruleset for all enrolled repos:** edit `policies/canonical-ruleset.json` on `nischal94/.github`, open a PR, merge. The next `enforce-on-poll` cron tick (`*/15` min) re-applies. To force immediate propagation, dispatch `force-sync.yml` manually with `target=all`.
 
 ---
 
