@@ -444,24 +444,26 @@ Each `ci-*.yml` has a `detect` job that exits clean if the language
 doesn't apply (no `package.json` → `ci-node` skips). `scripts/bootstrap.sh`
 prunes unused profiles at init time based on user's primary language.
 
-**⚠ stacks.yml monorepo support is currently BROKEN.** T3 dogfood
-(2026-05-11, see [`repo-template` issue #55](https://github.com/nischal94/repo-template/issues/55))
-verified that `.github/stacks.yml`'s `path:` field is parsed by the
-detect step but NEVER consumed downstream — the ci job always runs
-from the repo root regardless. End-to-end:
-- Monorepo with `services/web/package.json`: ci-node.yml detects
-  `kind: node`, ci-node.sh runs `npm i` at the root, fails because
-  there's no package.json there.
-- Same for python, go, sql.
+**stacks.yml monorepo support: PARTIAL as of 2026-05-11.**
 
-**Until issue #55 lands**, do NOT steer the user toward monorepo
-setups. If the user has a multi-stack repo already:
-1. Recommend they split into separate single-stack repos (each
-   enrolled separately).
-2. If they insist on monorepo, warn that ci-* workflows will need
-   per-project customization (manual `working-directory:` edits or
-   bespoke scripts per service). The template's automated monorepo
-   path doesn't exist yet.
+| ci-*.yml | Monorepo support |
+|---|---|
+| ✅ ci-node | Supported (PR #56). `stacks.yml` `path:` field is honored; ci job iterates paths. One Node version per job (job-level setup-node); split into separate repos if you need different Node versions per service. |
+| ⬜ ci-python | Same bug as Node had. Use single-stack or workaround until fixed. |
+| ⬜ ci-go | Same bug. |
+| ⬜ ci-docker | Same bug. |
+| ⬜ ci-e2e | Same bug. |
+| ⬜ ci-docs | Same bug. |
+| ⬜ ci-shell | Same bug. |
+| ⬜ ci-sql | Same bug (Postgres service container is job-level; migrations loop needs path-awareness). |
+
+Issue [#55](https://github.com/nischal94/repo-template/issues/55) tracks the remaining 7. Each will land as its own focused PR with Tier 2 review.
+
+**Operational guidance for the partial state**:
+- **Pure Node monorepo (e.g., Next.js + worker package)**: ✅ supported. Use `stacks.yml` with `kind: node` + `path:` entries.
+- **Mixed-stack monorepo (e.g., Next.js + Python sidecar)**: only the Node side works through stacks.yml. Two options:
+  1. **Recommended**: split into separate repos. Each gets its own enrollment.
+  2. **Workaround**: keep as monorepo, but for the Python/Go/SQL/Docker sides, manually customize the relevant ci-*.yml in the user's repo to set `working-directory:` (until per-language PRs land).
 
 **Has bootstrap.sh already run on this repo?** Check signals:
 - Presence of `Makefile` (bootstrap.sh generates it) → likely yes.
