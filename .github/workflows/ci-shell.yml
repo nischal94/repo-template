@@ -11,6 +11,7 @@ concurrency:
 jobs:
   detect:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       applies: ${{ steps.check.outputs.applies }}
       paths: ${{ steps.check.outputs.paths }}
@@ -42,6 +43,7 @@ jobs:
     needs: detect
     if: needs.detect.outputs.applies == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
