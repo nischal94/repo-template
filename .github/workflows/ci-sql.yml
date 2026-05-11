@@ -11,6 +11,7 @@ concurrency:
 jobs:
   detect:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       applies: ${{ steps.check.outputs.applies }}
       paths: ${{ steps.check.outputs.paths }}
@@ -39,6 +40,7 @@ jobs:
     needs: detect
     if: needs.detect.outputs.applies == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       # ONE Postgres instance per job, shared across all stack paths.
       # Most monorepos run a single backing Postgres in production, so
