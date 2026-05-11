@@ -48,9 +48,26 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
+      # Detect which lockfile (if any) is committed. actions/setup-node's
+      # `cache:` input hard-fails when set to a manager whose lockfile is
+      # absent, so greenfield Node projects (no lockfile yet committed)
+      # would fail their first CI run with "Dependencies lock file is not
+      # found". Setting `cache:` only when a matching lockfile exists is
+      # the documented escape hatch.
+      - id: lockfile
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "manager=npm" >> "$GITHUB_OUTPUT"
+          elif [ -f pnpm-lock.yaml ]; then
+            echo "manager=pnpm" >> "$GITHUB_OUTPUT"
+          elif [ -f yarn.lock ]; then
+            echo "manager=yarn" >> "$GITHUB_OUTPUT"
+          else
+            echo "manager=" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: ".nvmrc"
-          cache: npm
+          cache: ${{ steps.lockfile.outputs.manager }}
       - name: Run ci-node.sh
         run: bash .github/scripts/ci-node.sh
