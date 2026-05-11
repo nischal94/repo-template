@@ -28,7 +28,11 @@ jobs:
         with:
           results_file: results.sarif
           results_format: sarif
-          publish_results: true
+          # Findings still surface in the GitHub Security tab via the SARIF
+          # upload below — publishing to api.scorecard.dev is opt-in and
+          # currently rejects this workflow shape, causing the job to exit 1
+          # on every push. Re-enable once the upstream constraints are met.
+          publish_results: false
       - uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4.3.4
         with:
           name: scorecard-results
