@@ -14,7 +14,17 @@ fi
 echo "==> Lint..."
 npm run lint --if-present
 echo "==> Typecheck..."
-npm run typecheck --if-present || npx tsc --noEmit
+# If the project defines its own typecheck script, honor it strictly
+# (don't fall back to a generic tsc invocation that could mask stricter
+# flags). If not defined, fall back to `npx tsc --noEmit` ONLY when a
+# tsconfig.json exists.
+if npm run | grep -qE "^  typecheck$"; then
+  npm run typecheck
+elif [ -f tsconfig.json ]; then
+  npx tsc --noEmit
+else
+  echo "==> No typecheck script and no tsconfig.json; skipping typecheck."
+fi
 echo "==> Test..."
 npm test --if-present
 echo "==> Coverage..."
