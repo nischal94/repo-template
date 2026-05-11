@@ -370,6 +370,46 @@ mitigates a different attack class.
 
 ---
 
+## AI-native projects: known platform gaps
+
+The platform was designed before the AI-native workflow shape became
+dominant. Three gaps matter for any project that calls model APIs
+(Anthropic, OpenAI, Mistral, Together, etc.) at CI time:
+
+1. **`api.anthropic.com` / `api.openai.com` are NOT in the default
+   harden-runner `allowed-endpoints` lists.** `ci-node.yml`,
+   `ci-python.yml`, `ci-go.yml`, etc. ship with block-mode egress
+   restricted to package registries + GitHub. **Any CI test that
+   calls a real model API will fail with a confusing harden-runner
+   denial.** This affects: eval frameworks (T5/T2 archetype),
+   integration tests, agent regression suites.
+
+   Workarounds:
+   - **Preferred**: mock the model API in CI tests; only hit real APIs
+     in a separate dedicated workflow with its own egress allowlist.
+   - **Per-project**: in the user's repo, edit the relevant `ci-*.yml`
+     to add `api.anthropic.com:443` (and any other AI hosts) to
+     `allowed-endpoints`. Warn the user this widens the egress
+     surface and that each new host should be justified.
+   - **Future**: a follow-up PR could add an opt-in AI-egress workflow
+     profile (`ci-ai-eval.yml`) with its own allowlist. Not yet built.
+
+2. **`api.anthropic.com` IS allowed for `claude.yml`** (the @claude
+   GitHub action) because that workflow uses `egress-policy: audit`,
+   not block. So @claude review works fine without intervention.
+
+3. **`cd-deploy.yml` uses `egress-policy: audit` deliberately** —
+   deploy commands hit unpredictable third-party hosts (Vercel /
+   Fly / Railway / their CDNs). Don't try to tighten this without
+   building a per-target allowlist.
+
+When future-Claude is initializing an AI-native project, surface
+gap #1 to the user explicitly. The default is to fail-closed (block
+real API calls); tell them up front so they're not surprised by the
+first CI run.
+
+---
+
 ## Stack detection (Layer 2 `ci-*.yml` files)
 
 Each `ci-*.yml` has a `detect` job that exits clean if the language
