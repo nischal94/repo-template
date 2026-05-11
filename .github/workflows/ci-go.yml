@@ -13,16 +13,25 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       applies: ${{ steps.check.outputs.applies }}
+      paths: ${{ steps.check.outputs.paths }}
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
       - id: check
         run: |
-          if [ -f .github/stacks.yml ] && yq '.stacks[] | select(.kind == "go")' .github/stacks.yml > /dev/null; then
-            echo "applies=true" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [ -f .github/stacks.yml ]; then
+            paths_json=$(yq -o=json -I=0 '[.stacks[] | select(.kind == "go") | (.path // ".") | select(. != "")] | unique' .github/stacks.yml)
+            if [ "$paths_json" = "[]" ]; then
+              echo "applies=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "applies=true" >> "$GITHUB_OUTPUT"
+              echo "paths=$paths_json" >> "$GITHUB_OUTPUT"
+            fi
           elif [ -f go.mod ]; then
             echo "applies=true" >> "$GITHUB_OUTPUT"
+            echo 'paths=["."]' >> "$GITHUB_OUTPUT"
           else
             echo "applies=false" >> "$GITHUB_OUTPUT"
           fi
@@ -46,9 +55,50 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
+      # In monorepo mode: .go-version may live at the repo root OR at the
+      # first stack path. setup-go is job-level — runs once. Write the
+      # effective .go-version INSIDE $GITHUB_WORKSPACE (PR #56's path.join
+      # finding applies equally to setup-go).
+      - id: govers
+        env:
+          PATHS_JSON: ${{ needs.detect.outputs.paths }}
+        run: |
+          set -euo pipefail
+          FIRST_PATH=$(jq -r '.[0] // "."' <<<"$PATHS_JSON")
+          EFFECTIVE_GOVERS="$GITHUB_WORKSPACE/.go-version.effective"
+          if [ -f .go-version ]; then
+            cp .go-version "$EFFECTIVE_GOVERS"
+          elif [ -f "$FIRST_PATH/.go-version" ]; then
+            cp "$FIRST_PATH/.go-version" "$EFFECTIVE_GOVERS"
+          else
+            echo "1.22" > "$EFFECTIVE_GOVERS"
+          fi
       - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
-          go-version-file: ".go-version"
+          go-version-file: ".go-version.effective"
           cache: true
-      - name: Run ci-go.sh
-        run: bash .github/scripts/ci-go.sh
+      - name: Run ci-go.sh per stack path
+        env:
+          PATHS_JSON: ${{ needs.detect.outputs.paths }}
+        run: |
+          set -uo pipefail
+          mapfile -t PATHS < <(jq -r '.[]' <<<"$PATHS_JSON")
+          if [ "${#PATHS[@]}" -eq 0 ]; then
+            echo "::error::ci-go: paths output was empty"
+            exit 1
+          fi
+          FAILED=()
+          for p in "${PATHS[@]}"; do
+            echo "::group::ci-go.sh at $p"
+            if (cd "$p" && bash "$GITHUB_WORKSPACE/.github/scripts/ci-go.sh"); then
+              echo "::endgroup::"
+            else
+              echo "::endgroup::"
+              echo "::error::ci-go.sh failed at path: $p"
+              FAILED+=("$p")
+            fi
+          done
+          if [ "${#FAILED[@]}" -gt 0 ]; then
+            echo "::error::ci-go failed at ${#FAILED[@]} path(s): ${FAILED[*]}"
+            exit 1
+          fi
