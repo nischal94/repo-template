@@ -19,6 +19,6 @@ jobs:
           persist-credentials: false
       - name: Install actionlint
         run: |
-          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/3795ba2f6cb243eeca54c9d22e5c531cb9dcfb4a/scripts/download-actionlint.bash) # v1.7.12
       - name: Run actionlint
         run: ./actionlint -color
