@@ -75,15 +75,30 @@ jobs:
             echo "3.12" > "$EFFECTIVE_PYVERS"
           fi
           # cache: pip needs a dependency file. Detect in first path.
-          if [ -f "$FIRST_PATH/pyproject.toml" ] || compgen -G "$FIRST_PATH/requirements*.txt" > /dev/null; then
+          # Also emit cache-dependency-path matching the actual file so
+          # setup-python's hash is stable. Tier 1 review: previous version
+          # gated `cache: pip` on first-path detection but didn't set
+          # cache-dependency-path, causing setup-python to default-glob
+          # the whole workspace — inconsistent with how #56/#63 handle it.
+          if [ -f "$FIRST_PATH/pyproject.toml" ]; then
             echo "cache=pip" >> "$GITHUB_OUTPUT"
+            echo "cache_dep_path=$FIRST_PATH/pyproject.toml" >> "$GITHUB_OUTPUT"
+          elif compgen -G "$FIRST_PATH/requirements*.txt" > /dev/null; then
+            # First match wins. Real projects rarely have multiple
+            # requirements*.txt at the same path; if they do, the
+            # hash key still covers the directory implicitly.
+            first_req=$(compgen -G "$FIRST_PATH/requirements*.txt" | head -1)
+            echo "cache=pip" >> "$GITHUB_OUTPUT"
+            echo "cache_dep_path=$first_req" >> "$GITHUB_OUTPUT"
           else
             echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "cache_dep_path=" >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version-file: ".python-version.effective"
           cache: ${{ steps.pyvers.outputs.cache }}
+          cache-dependency-path: ${{ steps.pyvers.outputs.cache_dep_path }}
       - name: Run ci-python.sh per stack path
         env:
           PATHS_JSON: ${{ needs.detect.outputs.paths }}
