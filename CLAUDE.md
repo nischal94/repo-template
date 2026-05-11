@@ -98,18 +98,37 @@ b. **`[ASK]` Overlay template files into the existing folder.**
    curl -fsSL https://raw.githubusercontent.com/nischal94/repo-template/main/scripts/overlay.sh | bash
    ```
 
-   `scripts/overlay.sh` lives in the template; it walks the curated
-   overlay-files list (~40 files: hygiene configs, Layer 2 workflows,
-   bootstrap.sh, CLAUDE.md itself, the example files) and `gh api`s
-   each one in. NEVER use `gh repo clone` for this — clone overwrites
-   the user's `.git/` state.
+   When `scripts/overlay.sh` exists on the template, it walks the
+   curated overlay-files list (planned to cover ~40 files: hygiene
+   configs, Layer 2 workflows, bootstrap.sh, CLAUDE.md itself, the
+   example files) and `gh api`s each one in. NEVER use `gh repo clone`
+   for this — clone overwrites the user's `.git/` state.
 
-   If `scripts/overlay.sh` doesn't exist yet on the template (the
-   overlay script PR may not have merged), fall back to a small
-   manual overlay covering the high-value files only: `.gitignore`,
-   `CLAUDE.md`, `scripts/bootstrap.sh`, and the single `ci-<lang>.yml`
-   matching the project's primary language. Tell the user the
-   abbreviated overlay landed and the rest can come later.
+   **If `scripts/overlay.sh` doesn't exist yet on the template**
+   (verify with `gh api repos/nischal94/repo-template/contents/scripts/overlay.sh`
+   returning 404), fall back to a manual overlay. Minimum set the
+   user needs for bootstrap.sh to work AND for Layer 2 CI to fire
+   on the initial push:
+
+   - `.gitignore`
+   - `CLAUDE.md`
+   - `scripts/bootstrap.sh`
+   - `.github/workflows/ci-<lang>.yml` matching the project's language
+   - `.github/scripts/ci-<lang>.sh` matching the project's language
+   - `.github/workflows/cd-deploy.yml` (only if deploy target present)
+   - `.github/workflows/release.yml`, `sbom-on-release.yml` (only if
+     versioned releases planned)
+   - `.editorconfig`, `.<lang>-version` (`.python-version`,
+     `.nvmrc`, `.go-version` — whichever matches)
+
+   Each one fetched via:
+   ```bash
+   gh api "repos/nischal94/repo-template/contents/<path>" \
+     -H "Accept: application/vnd.github.raw" > <path>
+   ```
+
+   Tell the user this is the abbreviated overlay; the rest can come
+   later when `overlay.sh` lands.
 
 c. **`[ASK]` Initialize git and create the initial commit.**
    The user's Git-safety SCAR requires explicit confirmation for
@@ -122,20 +141,29 @@ c. **`[ASK]` Initialize git and create the initial commit.**
    git commit -m "chore: initial commit"
    ```
 
-   Note: `scripts/bootstrap.sh` (run in step d) ALSO does `git add . &&
-   git commit` at its end. If the user prefers, skip this step and let
-   bootstrap.sh do both — but in that case bootstrap.sh's commit is
-   the initial commit, and its message is "chore: initial bootstrap
-   from nischal94/repo-template", not "chore: initial commit". Either
-   ordering works; pick one and tell the user which.
+   Note: `scripts/bootstrap.sh` (run in step d) ALSO offers to do
+   `git add . && git commit` at its end (post-PR #50, this is gated
+   behind a confirmation prompt). Two valid orderings:
+   - **Option 1:** run step c first (init + initial commit yourself),
+     then in step d let bootstrap detect the clean tree (case 1) and
+     exit silently. The user controls the commit message.
+   - **Option 2:** skip step c. In step d, bootstrap.sh detects no
+     `.git/` (case 3), prompts you to confirm `git init -b main &&
+     git add . && git commit`, and creates an initial commit with
+     message `chore: initial bootstrap from nischal94/repo-template`.
+   Pick one; tell the user which.
 
-d. **Run `bash scripts/bootstrap.sh`** to do per-language setup +
-   Makefile generation + workflow pruning. The script prompts for
-   project name / language / license interactively. **The script
-   currently runs `git init` + `git commit` non-interactively at its
-   end** — if step c already ran git init, bootstrap's git init will
-   noop, but its `git commit` will run; warn the user. (A patch to
-   bootstrap.sh making this confirmable is queued separately.)
+d. **`[ASK]` Run `bash scripts/bootstrap.sh`** for per-language setup
+   + Makefile generation + workflow pruning. The script prompts for
+   project name / language / license interactively. At its end,
+   bootstrap performs one of three branches (post-PR #50):
+   - Case 1 (`.git/` exists + clean tree): no-op, exit silently.
+   - Case 2 (`.git/` exists + uncommitted changes): asks before
+     `git add + git commit`.
+   - Case 3 (no `.git/`): asks before `git init + add + commit`.
+   In every case the prompt honors the user's Git-safety SCAR — the
+   `[ASK]` here is to make sure the user knows bootstrap will reach
+   the prompt, not to gate bootstrap itself.
 
 e. **`[ASK]` Create the GitHub repo.**
    By now the working tree has: user's content + template overlay +
@@ -145,7 +173,10 @@ e. **`[ASK]` Create the GitHub repo.**
    gh repo create nischal94/<name> --<visibility> --source=. --remote=origin --push
    ```
 
-   `--push` refuses if HEAD has no commits (caught in step c or d).
+   `--push` refuses if HEAD has no commits. Exactly one of step c
+   (manual init+commit) or step d (bootstrap's confirmation gate)
+   will have created the initial commit by now, so HEAD points at
+   something real and `--push` works either way.
    Default branch is `main` (matches the canonical ruleset's target).
    This step creates a public/private record on GitHub; confirm name
    + visibility one more time before running.
@@ -191,17 +222,29 @@ bash scripts/bootstrap.sh
 git push origin main
 ```
 
-Then jump to step f (enrollment PR) above.
+Then proceed to step f (enrollment PR) above.
 
 ### Steps for State C (local-first: files + git, no remote)
 
-Skip step c. Run b (overlay), d (bootstrap — its git commit will land
-on top of user's existing commits), e (gh repo create), f (enrollment).
+`.git/` already exists with the user's prior commits. Skip step c
+(no init needed). Run b (overlay), then d (bootstrap).
+
+In step d, bootstrap's gate will detect a dirty tree (case 2 — the
+overlay added files that aren't committed yet) and ask before
+committing. Confirm. Bootstrap's commit lands on top of the user's
+existing history — **the user's original commits are preserved**;
+bootstrap's `chore: initial bootstrap from nischal94/repo-template`
+is just another commit. (If the user wants to squash, they can
+`git reset --soft <pre-bootstrap-commit>` after bootstrap finishes
+and re-commit — that's their call, ask first since reset is
+SCAR-gated.)
+
+Then proceed to step e (gh repo create) and step f (enrollment PR).
 
 ### Steps for State D (already pushed)
 
-If the repo already exists on GitHub and origin is set, the user is
-asking about Layer 1 enrollment. Skip directly to step f.
+If the repo already exists on GitHub and `origin` is set, the user is
+asking about Layer 1 enrollment. Proceed to step f (enrollment PR).
 
 ---
 
@@ -324,27 +367,15 @@ either applied or is pending the next enforce-on-poll cron tick.
 
 ## Open gaps in this workflow (known limits)
 
-Two known gaps as of 2026-05-11; the platform works around them today
-but each is worth knowing about:
+One known gap as of 2026-05-11:
 
 1. **`scripts/overlay.sh` may not yet exist on the template.** A v1
-   overlay-script PR was deferred during review. State B's step b
-   above documents the fall-back: small manual overlay covering
-   `.gitignore`, `CLAUDE.md`, `scripts/bootstrap.sh`, and the one
-   `ci-<lang>.yml` matching the user's primary language. If `overlay.sh`
-   has since landed, prefer the one-liner.
-
-2. **`scripts/bootstrap.sh` runs `git init` + `git commit`
-   non-interactively** even when the user's Git-safety SCAR requires
-   explicit confirmation. A patch making this confirmable is queued
-   in a separate PR (`fix(bootstrap): pause before git init/commit`).
-   Until it merges, the workaround is to either:
-   - Run `git init -b main && git add . && git commit -m "chore: initial
-     commit"` yourself in step c (so bootstrap's commit is a no-op), OR
-   - Run bootstrap fresh and let its commit be the initial commit
-     (bootstrap message: `chore: initial bootstrap from
-     nischal94/repo-template`).
-   Either ordering works — pick one in confirmation with the user.
+   overlay-script PR was deferred. State B's step b above documents
+   the fall-back: an explicit minimum file set fetched via `gh api`
+   one path at a time. Verify presence with
+   `gh api repos/nischal94/repo-template/contents/scripts/overlay.sh`.
+   If it returns 200, prefer the one-liner; if 404, use the manual
+   list.
 
 ---
 
