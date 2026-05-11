@@ -141,44 +141,44 @@ echo "==> Bootstrap complete."
 #   3. .git/ does not exist (truly greenfield)   → ASK before git init + commit.
 # In all three, the user can decline and finish the commit themselves.
 
-if git rev-parse --git-dir > /dev/null 2>&1; then
-	# .git/ already exists. Check whether there's anything to commit.
-	if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
-		echo "==> Working tree clean; nothing to commit."
-		exit 0
-	fi
-	echo "==> Uncommitted changes detected. Run the following to commit?"
-	echo
-	echo "    git add ."
-	echo "    git commit -m 'chore: initial bootstrap from nischal94/repo-template'"
-	echo
-	read -r -p "Commit now? [y/N]: " CONFIRM
-	case "${CONFIRM:-n}" in
-	y | Y | yes | YES)
-		git add .
-		git commit -m "chore: initial bootstrap from nischal94/repo-template"
-		;;
-	*)
-		echo "==> Skipping commit. Run 'git add . && git commit' yourself when ready."
-		;;
-	esac
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  # .git/ already exists. Check whether there's anything to commit.
+  if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
+    echo "==> Working tree clean; nothing to commit."
+    exit 0
+  fi
+  echo "==> Uncommitted changes detected. Run the following to commit?"
+  echo
+  echo "    git add ."
+  echo "    git commit -m 'chore: initial bootstrap from nischal94/repo-template'"
+  echo
+  read -r -p "Commit now? [y/N]: " CONFIRM
+  case "${CONFIRM:-n}" in
+  y | Y | yes | YES)
+    git add .
+    git commit -m "chore: initial bootstrap from nischal94/repo-template"
+    ;;
+  *)
+    echo "==> Skipping commit. Run 'git add . && git commit' yourself when ready."
+    ;;
+  esac
 else
-	# No .git/ at all. The user wrote files in a non-git folder.
-	echo "==> No .git/ directory found. Initialize git here?"
-	echo
-	echo "    git init -b main"
-	echo "    git add ."
-	echo "    git commit -m 'chore: initial bootstrap from nischal94/repo-template'"
-	echo
-	read -r -p "Initialize and commit now? [y/N]: " CONFIRM
-	case "${CONFIRM:-n}" in
-	y | Y | yes | YES)
-		git init -b main
-		git add .
-		git commit -m "chore: initial bootstrap from nischal94/repo-template"
-		;;
-	*)
-		echo "==> Skipping git init. Run 'git init -b main && git add . && git commit' yourself when ready."
-		;;
-	esac
+  # No .git/ at all. The user wrote files in a non-git folder.
+  echo "==> No .git/ directory found. Initialize git here?"
+  echo
+  echo "    git init -b main"
+  echo "    git add ."
+  echo "    git commit -m 'chore: initial bootstrap from nischal94/repo-template'"
+  echo
+  read -r -p "Initialize and commit now? [y/N]: " CONFIRM
+  case "${CONFIRM:-n}" in
+  y | Y | yes | YES)
+    git init -b main
+    git add .
+    git commit -m "chore: initial bootstrap from nischal94/repo-template"
+    ;;
+  *)
+    echo "==> Skipping git init. Run 'git init -b main && git add . && git commit' yourself when ready."
+    ;;
+  esac
 fi
