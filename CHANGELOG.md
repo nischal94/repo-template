@@ -8,6 +8,7 @@ When you create a repo from this template, **note the date** below — it tells 
 
 ### Changed
 - Trivial test PR verifying the post-audit merge flow works end-to-end without `--admin`.
+- Trivial test PR verifying the refined `gh-merge` function handles auto-deleted branches silently.
 
 ## [2026-04-19] — Initial baseline
 
