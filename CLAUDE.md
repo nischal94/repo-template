@@ -441,10 +441,27 @@ first CI run.
 ## Stack detection (Layer 2 `ci-*.yml` files)
 
 Each `ci-*.yml` has a `detect` job that exits clean if the language
-doesn't apply (no `package.json` → `ci-node` skips). For monorepos,
-copy `.github/stacks.yml.example` to `.github/stacks.yml` and declare
-per-path stacks explicitly. `scripts/bootstrap.sh` prunes unused
-profiles at init time based on user's primary language.
+doesn't apply (no `package.json` → `ci-node` skips). `scripts/bootstrap.sh`
+prunes unused profiles at init time based on user's primary language.
+
+**⚠ stacks.yml monorepo support is currently BROKEN.** T3 dogfood
+(2026-05-11, see [`repo-template` issue #55](https://github.com/nischal94/repo-template/issues/55))
+verified that `.github/stacks.yml`'s `path:` field is parsed by the
+detect step but NEVER consumed downstream — the ci job always runs
+from the repo root regardless. End-to-end:
+- Monorepo with `services/web/package.json`: ci-node.yml detects
+  `kind: node`, ci-node.sh runs `npm i` at the root, fails because
+  there's no package.json there.
+- Same for python, go, sql.
+
+**Until issue #55 lands**, do NOT steer the user toward monorepo
+setups. If the user has a multi-stack repo already:
+1. Recommend they split into separate single-stack repos (each
+   enrolled separately).
+2. If they insist on monorepo, warn that ci-* workflows will need
+   per-project customization (manual `working-directory:` edits or
+   bespoke scripts per service). The template's automated monorepo
+   path doesn't exist yet.
 
 **Has bootstrap.sh already run on this repo?** Check signals:
 - Presence of `Makefile` (bootstrap.sh generates it) → likely yes.
