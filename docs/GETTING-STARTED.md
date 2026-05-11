@@ -79,7 +79,7 @@ git push origin main
 
 Open [`.github/workflows/scaffold-on-poll.yml`](https://github.com/nischal94/.github/blob/main/.github/workflows/scaffold-on-poll.yml), find the `SCAFFOLD_ALLOWLIST=""` line, add your repo's full name (space-separated), open a PR, merge.
 
-Within ~5 minutes, the App opens a scaffold PR on your new repo with the 8 Layer 1 workflows + the `.scaffolded-by-nischal94-policy` marker file. Merge it. On the next 5-minute cron tick, the canonical ruleset auto-applies. **No manual branch protection setup required.**
+Within ~15 minutes, the App opens a scaffold PR on your new repo with the 8 Layer 1 workflows + the `.scaffolded-by-nischal94-policy` marker file. Merge it. On the next 15-minute cron tick, the canonical ruleset auto-applies. **No manual branch protection setup required.**
 
 ### 5. Add per-project secrets
 
