@@ -114,5 +114,6 @@ jobs:
           done
           if [ "${#FAILED[@]}" -gt 0 ]; then
             echo "::error::ci-sql failed at ${#FAILED[@]} path(s): ${FAILED[*]}"
+            echo "::error::If migrations between services collide (e.g. two services both define a 'users' table) the migration error will surface above. The Postgres service container is SHARED across all stack paths in this workflow — see the services: comment above for why. If your services need genuinely isolated databases for testing, split into separate repos OR use schema-per-service in your migrations (CREATE SCHEMA + SET search_path)."
             exit 1
           fi
