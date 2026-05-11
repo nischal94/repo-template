@@ -444,26 +444,36 @@ Each `ci-*.yml` has a `detect` job that exits clean if the language
 doesn't apply (no `package.json` → `ci-node` skips). `scripts/bootstrap.sh`
 prunes unused profiles at init time based on user's primary language.
 
-**stacks.yml monorepo support: PARTIAL as of 2026-05-11.**
+**stacks.yml monorepo support: ✅ FULL as of 2026-05-11.**
 
-| ci-*.yml | Monorepo support |
-|---|---|
-| ✅ ci-node | Supported (PR #56). `stacks.yml` `path:` field is honored; ci job iterates paths. One Node version per job (job-level setup-node); split into separate repos if you need different Node versions per service. |
-| ⬜ ci-python | Same bug as Node had. Use single-stack or workaround until fixed. |
-| ⬜ ci-go | Same bug. |
-| ⬜ ci-docker | Same bug. |
-| ⬜ ci-e2e | Same bug. |
-| ⬜ ci-docs | Same bug. |
-| ⬜ ci-shell | Same bug. |
-| ⬜ ci-sql | Same bug (Postgres service container is job-level; migrations loop needs path-awareness). |
+All 8 per-stack `ci-*.yml` workflows honor `.github/stacks.yml`'s `path:` field. The detect step emits a JSON array of paths; the ci step iterates each path, runs the matching `ci-<lang>.sh` script with the path as working directory, collects per-path failures, and exits non-zero at the end if any path failed (matches Layer 2's "advisory but informative" design).
 
-Issue [#55](https://github.com/nischal94/repo-template/issues/55) tracks the remaining 7. Each will land as its own focused PR with Tier 2 review.
+| ci-*.yml | PR | Per-language notes |
+|---|---|---|
+| ✅ ci-node | #56 | One Node version per job (job-level setup-node); split repos for per-service Node versions |
+| ✅ ci-python | #60 | Includes T5-4-class fix: `cache: pip` is now lockfile-aware |
+| ✅ ci-go | #59 | One Go version per job; `cache: true` handles missing `go.sum` gracefully |
+| ✅ ci-docker | #62 | Each Dockerfile per path gets its own build + scan |
+| ✅ ci-e2e | #63 | Playwright browser install per path (idempotent; cached after first run) |
+| ✅ ci-docs | #61 | No setup-X; ci-docs.sh handles its own tool detection |
+| ✅ ci-shell | #58 | Simplest — no setup-X, just shellcheck + shfmt per path |
+| ✅ ci-sql | #64 | **Postgres service container is SHARED across paths.** Migrations apply sequentially against one DB (matches deployment shape). If migrations conflict across services, split the repo. |
 
-**Operational guidance for the partial state**:
-- **Pure Node monorepo (e.g., Next.js + worker package)**: ✅ supported. Use `stacks.yml` with `kind: node` + `path:` entries.
-- **Mixed-stack monorepo (e.g., Next.js + Python sidecar)**: only the Node side works through stacks.yml. Two options:
-  1. **Recommended**: split into separate repos. Each gets its own enrollment.
-  2. **Workaround**: keep as monorepo, but for the Python/Go/SQL/Docker sides, manually customize the relevant ci-*.yml in the user's repo to set `working-directory:` (until per-language PRs land).
+Issue [#55](https://github.com/nischal94/repo-template/issues/55) is now closed.
+
+**Monorepo usage**:
+```yaml
+# .github/stacks.yml
+stacks:
+  - kind: node
+    path: services/web
+  - kind: python
+    path: services/api
+  - kind: sql
+    path: services/api  # migrations live under services/api/migrations/
+```
+
+**Per-service language version constraints**: setup-node, setup-python, and setup-go are job-level (run once per workflow), so all paths in a single ci-* workflow share one toolchain version. The effective `.nvmrc` / `.python-version` / `.go-version` is resolved from the repo root first, then the FIRST stack path. If your services genuinely need different versions, split into separate repos.
 
 **Has bootstrap.sh already run on this repo?** Check signals:
 - Presence of `Makefile` (bootstrap.sh generates it) → likely yes.
