@@ -85,6 +85,34 @@ a. **`[ASK]` Visibility — never default to public.**
    `.env` files, deploy tokens, API keys, etc.) before proceeding.
    Per the user's "Public repo safety" override in `~/.claude/CLAUDE.md`.
 
+   **Critical platform constraint — explain this to the user
+   before they pick.** The canonical ruleset (which enforces the 7
+   required status checks on `main`) is applied via the GitHub
+   **Rulesets API**, which has a plan-level constraint:
+
+   - **Public repos**: rulesets work on any GitHub plan (including
+     Free). Platform works as designed.
+   - **Private repos on GitHub Free**: rulesets API returns HTTP 403
+     "Upgrade to GitHub Pro or make this repository public to enable
+     this feature." `enforce-on-poll` will fail to apply the canonical
+     ruleset; the repo will be scaffolded with Layer 1 workflows but
+     `main` will have NO enforced branch protection. T5 dogfood
+     confirmed this constraint live (2026-05-11).
+   - **Private repos on GitHub Pro / Team / Enterprise**: rulesets
+     work. Platform works as designed.
+
+   What to do at the visibility prompt:
+   1. If the user picks **public** → proceed.
+   2. If the user picks **private** → ask whether their account is
+      on Free or Pro+. If Free, warn that the canonical ruleset will
+      not apply; offer the user three options:
+      - Make the repo public (recommended for OSS / personal projects).
+      - Upgrade to GitHub Pro (~$4/mo at time of writing).
+      - Proceed with private + free, accepting that this repo runs
+        without enforced ruleset until they upgrade. The 7 Layer 1
+        workflows still run, but nothing prevents merging when they
+        fail. Document this trade-off in the repo's README.
+
 b. **`[ASK]` Overlay template files into the existing folder.**
    The local-first overlay is currently a one-liner you run from inside
    the project folder. It fetches files from
