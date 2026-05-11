@@ -56,32 +56,101 @@ first, then act:
 
 ### State detection
 
-1. No `.git/` directory and no GitHub repo exists → **greenfield**.
-2. `.git/` exists but no `origin` remote → **local-first** (typical:
-   user worked in the folder for a while, now wants it on GitHub).
-3. `origin` remote exists → already pushed; skip ahead to enrollment.
+Check the working directory and classify the project into one of four states:
 
-### Steps (run in order, ASK confirmation at each irreversible step)
+| State | Signals | Typical scenario |
+|---|---|---|
+| **A — Empty** | No files in cwd (or only `.DS_Store`) | Rare in this user's workflow — they always start by writing the spec first. |
+| **B — Files-no-git** | Real files present, no `.git/` directory, no template files (no `CLAUDE.md`, no `Makefile`, no `.github/workflows/`) | **THE COMMON CASE.** User did `mkdir myproject && cd myproject`, wrote `spec.md`, then code, then said "ship this." |
+| **C — Local-first** | Real files present, `.git/` exists, no `origin` remote | User initialized git themselves, hasn't pushed yet. Rare unless they explicitly `git init`d. |
+| **D — Already-pushed** | `origin` remote exists | Skip to enrollment; everything before is done. |
 
-a. **Visibility — always ask, never default to public.**
-   "Repo visibility? public/private?" If user picks public, scan the diff
-   for personal email/secrets/internal hostnames before proceeding. Per
-   the user's "Public repo safety" override in `~/.claude/CLAUDE.md`.
+**State B is what the user described as their workflow.** It needs the most care because:
+- Their working tree has real content (spec, code) — must not be clobbered.
+- The `git init` + initial commit is governed by their **Git-safety SCAR**
+  (`~/.claude/CLAUDE.md` says: NEVER run `git init` / `git commit` /
+  `git reset` / `git checkout .` / `git clean` inside a user's project
+  folder). The SCAR overrides this file. ALWAYS ask before any of those.
+- Template files (`CLAUDE.md`, `Makefile`, `.github/...`, hygiene configs)
+  are NOT yet on disk. Need to be overlaid before bootstrap can run.
 
-b. **Create the GitHub repo.**
-   Greenfield (no `.git/` yet): `git init -b main` first, then commit
-   the working tree (`git add . && git commit -m "chore: initial commit"`),
-   THEN run the create command. `gh repo create … --push` refuses to
-   push if HEAD has no commits.
+### Steps for State B (files-no-git)
+
+This is the canonical flow. Run in order, ASK confirmation at each step
+marked `[ASK]`.
+
+a. **`[ASK]` Visibility — never default to public.**
+   "Repo visibility? public/private?" If user picks public, scan the
+   working tree for personal email/secrets/internal hostnames (the
+   `.env` files, deploy tokens, API keys, etc.) before proceeding.
+   Per the user's "Public repo safety" override in `~/.claude/CLAUDE.md`.
+
+b. **`[ASK]` Overlay template files into the existing folder.**
+   The local-first overlay is currently a one-liner you run from inside
+   the project folder. It fetches files from
+   `nischal94/repo-template` via the GitHub Contents API and writes
+   them into the current directory, **skipping any path that already
+   exists locally** so the user's spec/code is never clobbered:
+
+   ```bash
+   # Template-overlay one-liner. Run from inside the project folder.
+   # Skips any path that already exists locally.
+   curl -fsSL https://raw.githubusercontent.com/nischal94/repo-template/main/scripts/overlay.sh | bash
+   ```
+
+   `scripts/overlay.sh` lives in the template; it walks the curated
+   overlay-files list (~40 files: hygiene configs, Layer 2 workflows,
+   bootstrap.sh, CLAUDE.md itself, the example files) and `gh api`s
+   each one in. NEVER use `gh repo clone` for this — clone overwrites
+   the user's `.git/` state.
+
+   If `scripts/overlay.sh` doesn't exist yet on the template (the
+   overlay script PR may not have merged), fall back to a small
+   manual overlay covering the high-value files only: `.gitignore`,
+   `CLAUDE.md`, `scripts/bootstrap.sh`, and the single `ci-<lang>.yml`
+   matching the project's primary language. Tell the user the
+   abbreviated overlay landed and the rest can come later.
+
+c. **`[ASK]` Initialize git and create the initial commit.**
+   The user's Git-safety SCAR requires explicit confirmation for
+   `git init`, `git add`, and `git commit` inside their folder.
+   Show them exactly what will run and wait for `yes`:
+
+   ```bash
+   git init -b main
+   git add .
+   git commit -m "chore: initial commit"
+   ```
+
+   Note: `scripts/bootstrap.sh` (run in step d) ALSO does `git add . &&
+   git commit` at its end. If the user prefers, skip this step and let
+   bootstrap.sh do both — but in that case bootstrap.sh's commit is
+   the initial commit, and its message is "chore: initial bootstrap
+   from nischal94/repo-template", not "chore: initial commit". Either
+   ordering works; pick one and tell the user which.
+
+d. **Run `bash scripts/bootstrap.sh`** to do per-language setup +
+   Makefile generation + workflow pruning. The script prompts for
+   project name / language / license interactively. **The script
+   currently runs `git init` + `git commit` non-interactively at its
+   end** — if step c already ran git init, bootstrap's git init will
+   noop, but its `git commit` will run; warn the user. (A patch to
+   bootstrap.sh making this confirmable is queued separately.)
+
+e. **`[ASK]` Create the GitHub repo.**
+   By now the working tree has: user's content + template overlay +
+   initial commit. Ready to push.
+
    ```bash
    gh repo create nischal94/<name> --<visibility> --source=. --remote=origin --push
    ```
-   The default branch is assumed to be `main` (matches `git init -b main`
-   and the canonical ruleset's target). This step is irreversible-ish
-   (user can delete the repo but creation is a public action). Confirm
-   name + visibility one more time before running.
 
-c. **Open the enrollment PR on `nischal94/.github`** (Layer 1 enrollment):
+   `--push` refuses if HEAD has no commits (caught in step c or d).
+   Default branch is `main` (matches the canonical ruleset's target).
+   This step creates a public/private record on GitHub; confirm name
+   + visibility one more time before running.
+
+f. **Open the enrollment PR on `nischal94/.github`** (Layer 1 enrollment):
 
    - Branch: `enroll/<name>` off `main`.
    - Edit `.github/workflows/scaffold-on-poll.yml`. Find the
@@ -97,7 +166,7 @@ c. **Open the enrollment PR on `nischal94/.github`** (Layer 1 enrollment):
      enforcement. Surface the PR URL and let the user `gh-merge <pr#>`
      (their function, see `~/.zshrc`).
 
-d. **Tell the user the timeline.**
+g. **Tell the user the timeline.**
    - ~15 min after enrollment PR merges: scaffold PR appears on new repo.
    - User merges the scaffold PR.
    - ~15 min after that: canonical ruleset auto-applies on the new repo's `main`.
@@ -109,6 +178,30 @@ d. **Tell the user the timeline.**
    `enforce-on-poll`'s last run succeeded (`gh run list --repo
    nischal94/.github --workflow=enforce-on-poll.yml --limit 5`). If
    enforce-on-poll is broken, scaffold-on-poll never fires.
+
+### Steps for State A (truly empty folder)
+
+Use `gh repo create --template` directly — no overlay needed because
+GitHub does the copy server-side:
+
+```bash
+gh repo create nischal94/<name> --template nischal94/repo-template --<visibility>
+gh repo clone nischal94/<name> && cd <name>
+bash scripts/bootstrap.sh
+git push origin main
+```
+
+Then jump to step f (enrollment PR) above.
+
+### Steps for State C (local-first: files + git, no remote)
+
+Skip step c. Run b (overlay), d (bootstrap — its git commit will land
+on top of user's existing commits), e (gh repo create), f (enrollment).
+
+### Steps for State D (already pushed)
+
+If the repo already exists on GitHub and origin is set, the user is
+asking about Layer 1 enrollment. Skip directly to step f.
 
 ---
 
@@ -229,21 +322,29 @@ either applied or is pending the next enforce-on-poll cron tick.
 
 ---
 
-## Known gap — local-first overlay flow not yet automated
+## Open gaps in this workflow (known limits)
 
-If the user is in **state 2 (local-first: existing folder with files, no
-GitHub repo, no template files)**, the right answer is to overlay missing
-template files into their folder before running the ship-to-GitHub flow.
-This overlay step is intentionally NOT yet automated by a script (a v1
-attempt was deferred in 2026-05-11 review). If the user asks for the
-local-first flow:
+Two known gaps as of 2026-05-11; the platform works around them today
+but each is worth knowing about:
 
-1. Surface this gap explicitly — don't pretend automation exists.
-2. Offer to overlay specific files manually (`gh api … contents/<path>
-   -H 'Accept: application/vnd.github.raw' > <path>` for each file from
-   the template, skipping any path that already exists locally).
-3. Suggest opening a follow-up PR on `repo-template` to add a hardened
-   overlay script if the user does this more than twice.
+1. **`scripts/overlay.sh` may not yet exist on the template.** A v1
+   overlay-script PR was deferred during review. State B's step b
+   above documents the fall-back: small manual overlay covering
+   `.gitignore`, `CLAUDE.md`, `scripts/bootstrap.sh`, and the one
+   `ci-<lang>.yml` matching the user's primary language. If `overlay.sh`
+   has since landed, prefer the one-liner.
+
+2. **`scripts/bootstrap.sh` runs `git init` + `git commit`
+   non-interactively** even when the user's Git-safety SCAR requires
+   explicit confirmation. A patch making this confirmable is queued
+   in a separate PR (`fix(bootstrap): pause before git init/commit`).
+   Until it merges, the workaround is to either:
+   - Run `git init -b main && git add . && git commit -m "chore: initial
+     commit"` yourself in step c (so bootstrap's commit is a no-op), OR
+   - Run bootstrap fresh and let its commit be the initial commit
+     (bootstrap message: `chore: initial bootstrap from
+     nischal94/repo-template`).
+   Either ordering works — pick one in confirmation with the user.
 
 ---
 
