@@ -6,6 +6,14 @@ correctly without the user re-explaining how the nischal94 CI platform works.
 
 This file is part of the [`nischal94/repo-template`](https://github.com/nischal94/repo-template) baseline. Projects created from the template inherit it via `gh repo create --template`; the template repo itself carries it for self-application.
 
+**Audience.** This template is currently scoped for personal use by
+`nischal94` and AI collaborators operating on `nischal94/*` repos.
+Several references below point at this user's local machine
+(`~/.claude/...`, `~/.zshrc`, `gh-merge` shell function). If the
+template is ever forked for external use, those references need
+parametrizing — for now they're load-bearing because that's where the
+actual config lives.
+
 ---
 
 ## The two-layer platform model
@@ -65,7 +73,7 @@ b. **Create the GitHub repo.**
    the working tree (`git add . && git commit -m "chore: initial commit"`),
    THEN run the create command. `gh repo create … --push` refuses to
    push if HEAD has no commits.
-   ```
+   ```bash
    gh repo create nischal94/<name> --<visibility> --source=. --remote=origin --push
    ```
    The default branch is assumed to be `main` (matches `git init -b main`
@@ -145,11 +153,11 @@ would assume the PR isn't ready. Don't trust `mergeStateStatus`; trust
 the check rollup directly (`gh pr checks <n> --required`).
 
 For Claude-driven merges (different shell, can't source `~/.zshrc`):
-```
+```bash
 gh api -X PUT "repos/<owner>/<repo>/pulls/<n>/merge" -f merge_method=squash
 ```
 Then delete the branch:
-```
+```bash
 gh api -X DELETE "repos/<owner>/<repo>/git/refs/heads/<branch>"
 ```
 (May 422 if the branch is the default or is protected — that's expected,
@@ -157,7 +165,7 @@ not a failure.)
 
 If the merge returns HTTP 405 "rule violations — 7 of 7 required status
 checks are expected", the branch is BEHIND `main` (strict mode). Fix:
-```
+```bash
 gh api -X PUT "repos/<owner>/<repo>/pulls/<n>/update-branch"
 ```
 Wait for CI to re-run, then retry the merge. **If `--auto` is already
