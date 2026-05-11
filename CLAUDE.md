@@ -165,6 +165,19 @@ d. **`[ASK]` Run `bash scripts/bootstrap.sh`** for per-language setup
    `[ASK]` here is to make sure the user knows bootstrap will reach
    the prompt, not to gate bootstrap itself.
 
+   **What bootstrap does NOT do**: it does not install dependencies.
+   For `node`, it runs `npm init -y` (no-op if `package.json` already
+   exists) but does NOT `npm install`. For `python`, it runs
+   `uv init . --vcs none` (no-op if `pyproject.toml` already exists)
+   but does NOT install dev/test extras. For `go`, it runs
+   `go mod init` (no-op if `go.mod` exists) but does NOT
+   `go mod download`. Dependency installation happens in CI on first
+   push, via the matching `ci-<lang>.sh` script (see
+   `.github/scripts/ci-*.sh`). If the user wants their local
+   working tree to be runnable immediately after bootstrap, they
+   need to run the install step themselves (`npm install` /
+   `pip install -e ".[dev,test]"` / `go mod download`).
+
 e. **`[ASK]` Create the GitHub repo.**
    By now the working tree has: user's content + template overlay +
    initial commit. Ready to push.
@@ -209,6 +222,21 @@ g. **Tell the user the timeline.**
    `enforce-on-poll`'s last run succeeded (`gh run list --repo
    nischal94/.github --workflow=enforce-on-poll.yml --limit 5`). If
    enforce-on-poll is broken, scaffold-on-poll never fires.
+
+   **Unprotected window — flag this to the user.** From the moment
+   the GitHub repo is created (step e) until the scaffold PR merges
+   (~15-30 min later, depending on cron cadence + user's response
+   time), the repo has NO Layer 1 protection. No `gitleaks` scan,
+   no `dependency-review`, no `osv-scanner`, no `pin-actions`, no
+   `validate-pr-title`, no `license-check`. The canonical ruleset
+   has not applied yet either, so `main` is unprotected.
+   Tell the user: during this window, DO NOT push secrets, do not
+   merge unreviewed dependency bumps, do not test-push code that
+   contains credentials, do not promote the repo URL. Once the
+   scaffold PR merges and the next enforce-on-poll cron tick applies
+   the ruleset, all guardrails come online — including
+   `gitleaks` retroactively scanning the full history, so any
+   secrets pushed during the window will surface there.
 
 ### Steps for State A (truly empty folder)
 
