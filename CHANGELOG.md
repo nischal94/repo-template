@@ -6,9 +6,28 @@ When you create a repo from this template, **note the date** below — it tells 
 
 ## [Unreleased]
 
+### Security
+
+- **Workflow hardening sweep** — every `actions/checkout` call in every workflow now sets `persist-credentials: false` (29/29 checkouts on `repo-template`, 11/11 on `nischal94/.github`). Removes the `GITHUB_TOKEN` from `.git/config` after checkout so compromised downstream steps can't read it. Codified as one of four canonical workflow hardening defaults in [`nischal94/.github`'s POLICIES.md → Workflow hardening defaults](https://github.com/nischal94/.github/blob/main/docs/POLICIES.md#workflow-hardening-defaults).
+- **Egress allowlist gaps closed** — `ci-shell` (`proxy.golang.org`, `sum.golang.org`, `storage.googleapis.com`), `ci-sql` (Ubuntu archive mirrors), `ci-go` (`vuln.go.dev` for `govulncheck`), `ci-docker` (`mirror.gcr.io`, `pkg-containers.githubusercontent.com` for Trivy DB blobs), and `ci-e2e` (Ubuntu archives for Playwright `--with-deps` + `cdn.playwright.dev`) all had `egress-policy: block` with allowlists that didn't cover endpoints the underlying scripts actually contact. Fixed before any derived repo could become the canary.
+- **`force-sync.yml` script-injection fix** (on `nischal94/.github`) — workflow_dispatch `inputs.target` is now passed via `env:` and referenced as `$TARGET` in shell, never interpolated directly into `run:` blocks.
+
 ### Changed
-- Trivial test PR verifying the post-audit merge flow works end-to-end without `--admin`.
-- Trivial test PR verifying the refined `gh-merge` function handles auto-deleted branches silently.
+
+- **Node 24 readiness** — every pinned third-party action bumped to its Node-24-ready SHA ahead of the June 2 2026 GitHub deprecation (`actions/checkout` → v5.0.0, `step-security/harden-runner` → v2.13.1, `setup-node` → v4.4.0, `setup-python` → v5.6.0, `setup-go` → v5.5.0, `dependency-review-action` → v4.7.3, `upload/download-artifact` → v4.6.2/v4.3.0, `scorecard-action` → v2.4.3, `sbom-action` → v0.20.5, `setup-ruby` → v1.265.0, `softprops/action-gh-release` → v2.4.0, `codeql/upload-sarif` → `codeql-bundle-v2.23.2`).
+- **Canonical ruleset relaxed for solo-account use** — `required_approving_review_count: 0` and `require_code_owner_review: false`. CODEOWNERS files blanked to comment-only placeholders. Restores normal `gh pr merge` flow on a single-identity account where the self-review trap previously blocked every merge. Documented in [POLICIES.md → Pull request rules](https://github.com/nischal94/.github/blob/main/docs/POLICIES.md#pull-request-rules).
+- **Standard merge flow documented** — `gh pr create --fill && gh pr merge --auto --squash --delete-branch` is the everyday workflow; `gh-merge` shell function for immediate-merge after CI is green. See [POLICIES.md → Merging PRs](https://github.com/nischal94/.github/blob/main/docs/POLICIES.md#merging-prs--use-gh-merge-not-gh-pr-merge).
+- **Scorecard `publish_results: false`** — the action was failing on every push trying to publish to `api.scorecard.dev`. Findings still surface in the GitHub Security tab via SARIF upload.
+
+### Fixed
+
+- **`scripts/bootstrap.sh` python init** — four bugs in the one-liner that initialized Python projects:
+  - shfmt format drift (case-branch labels used tabs in a 2-space-indent file)
+  - Bash operator-precedence bug (`test || A && B && C` parsed as `(test || A) && B && C`, so `B && C` ran even when `test` succeeded)
+  - `set -e` was silently disabled inside `|| { ... }`, masking pip/uv install failures
+  - `python -m venv .venv` followed by plain `pip install` resolved to the system pip, not the venv's pip; uv was being installed globally and `.venv` sat empty
+  - All four addressed; the python branch now uses an explicit `if [ ! -f pyproject.toml ]; then ... fi` block with `.venv/bin/python -m pip install` and `.venv/bin/uv init`.
+- **Bootstrap workflow-cleanup glob** — added `shopt -s nullglob` so the cleanup loop doesn't iterate once with a literal `ci-*.yml` string when the directory is empty.
 
 ## [2026-04-19] — Initial baseline
 
