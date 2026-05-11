@@ -56,7 +56,7 @@ jobs:
       # the documented escape hatch.
       - id: lockfile
         run: |
-          if [ -f package-lock.json ]; then
+          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
             echo "manager=npm" >> "$GITHUB_OUTPUT"
           elif [ -f pnpm-lock.yaml ]; then
             echo "manager=pnpm" >> "$GITHUB_OUTPUT"
