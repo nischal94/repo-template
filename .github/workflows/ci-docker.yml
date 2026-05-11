@@ -13,16 +13,25 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       applies: ${{ steps.check.outputs.applies }}
+      paths: ${{ steps.check.outputs.paths }}
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
       - id: check
         run: |
-          if [ -f .github/stacks.yml ] && yq '.stacks[] | select(.kind == "docker")' .github/stacks.yml > /dev/null; then
-            echo "applies=true" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [ -f .github/stacks.yml ]; then
+            paths_json=$(yq -o=json -I=0 '[.stacks[] | select(.kind == "docker") | (.path // ".") | select(. != "")] | unique' .github/stacks.yml)
+            if [ "$paths_json" = "[]" ]; then
+              echo "applies=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "applies=true" >> "$GITHUB_OUTPUT"
+              echo "paths=$paths_json" >> "$GITHUB_OUTPUT"
+            fi
           elif [ -f Dockerfile ] || [ -f compose.yml ] || [ -f docker-compose.yml ]; then
             echo "applies=true" >> "$GITHUB_OUTPUT"
+            echo 'paths=["."]' >> "$GITHUB_OUTPUT"
           else
             echo "applies=false" >> "$GITHUB_OUTPUT"
           fi
@@ -48,5 +57,39 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
-      - name: Run ci-docker.sh
-        run: bash .github/scripts/ci-docker.sh
+      - name: Run ci-docker.sh per stack path
+        # ci-docker.sh builds an image tagged local/test:ci from the
+        # current working directory. In a monorepo, each iteration
+        # OVERWRITES the same local/test:ci tag — but because the
+        # build + trivy scan happen sequentially within each `cd $p`
+        # subshell, each path's image IS fully scanned before the
+        # next iteration overwrites the tag. Result: every Dockerfile
+        # gets a real scan, but you can't inspect images post-run
+        # since only the last one survives. That's fine for CI.
+        # If a future use case needs persistent per-path images
+        # (e.g. publishing to a registry), update ci-docker.sh to
+        # accept a tag prefix and iterate the tag here.
+        env:
+          PATHS_JSON: ${{ needs.detect.outputs.paths }}
+        run: |
+          set -uo pipefail
+          mapfile -t PATHS < <(jq -r '.[]' <<<"$PATHS_JSON")
+          if [ "${#PATHS[@]}" -eq 0 ]; then
+            echo "::error::ci-docker: paths output was empty"
+            exit 1
+          fi
+          FAILED=()
+          for p in "${PATHS[@]}"; do
+            echo "::group::ci-docker.sh at $p"
+            if (cd "$p" && bash "$GITHUB_WORKSPACE/.github/scripts/ci-docker.sh"); then
+              echo "::endgroup::"
+            else
+              echo "::endgroup::"
+              echo "::error::ci-docker.sh failed at path: $p"
+              FAILED+=("$p")
+            fi
+          done
+          if [ "${#FAILED[@]}" -gt 0 ]; then
+            echo "::error::ci-docker failed at ${#FAILED[@]} path(s): ${FAILED[*]}"
+            exit 1
+          fi
