@@ -30,8 +30,10 @@ jobs:
           results_format: sarif
           # Findings still surface in the GitHub Security tab via the SARIF
           # upload below — publishing to api.scorecard.dev is opt-in and
-          # currently rejects this workflow shape, causing the job to exit 1
-          # on every push. Re-enable once the upstream constraints are met.
+          # currently rejects this workflow shape (security-events: write
+          # at the workflow level fails its workflow-restrictions check),
+          # causing the job to exit 1 on every push. Re-enable once the
+          # upstream constraints are met. Mirrors repo-template PR #35.
           publish_results: false
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
