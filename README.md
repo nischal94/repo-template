@@ -93,12 +93,28 @@ Pre-configured for the common stacks:
 
 The canonical ruleset (auto-applied by the App after scaffold PR merge) requires:
 
-- 1 approving review (solo accounts: use `gh pr merge --admin` for unblocking; see [`nischal94/.github`#21](https://github.com/nischal94/.github/issues/21))
-- Signed commits
 - All 7 Layer 1 status checks passing (`gitleaks`, `dependency-review`, `osv-scanner`, `actionlint`, `pin-actions`, `validate-pr-title`, `license-check`)
-- No force-push, no deletion, no `pull_request_target` workflows
+- Signed commits
+- Every review thread resolved
+- No force-push, no branch deletion, no history rewrites
+
+`required_approving_review_count` is `0` and `require_code_owner_review` is `false` — the solo-account default. Both flip back to enforced reviewer counts when a second human or machine code-owner exists on the account. See [`nischal94/.github`'s POLICIES.md](https://github.com/nischal94/.github/blob/main/docs/POLICIES.md) for the merge-rule rationale.
+
+**Standard merge flow** (no human-in-the-loop after PR creation):
+
+```bash
+git push -u origin feat/whatever
+gh pr create --fill
+gh pr merge --auto --squash --delete-branch    # GitHub merges when CI lands
+```
+
+For immediate-merge after CI is already green, use the `gh-merge` shell function documented in [`nischal94/.github`'s POLICIES.md](https://github.com/nischal94/.github/blob/main/docs/POLICIES.md#merging-prs--use-gh-merge-not-gh-pr-merge) — it bypasses a stale-cache bug in `gh pr merge` and merges via the underlying REST endpoint directly.
 
 Layer 2 status checks (`ci-*` per language) are **not** in the required list — they're advisory at the canonical level. Add them to per-repo branch protection if you want them blocking.
+
+### `pull_request_target` usage
+
+The template ships `dependabot-automerge.yml` with `on: pull_request_target`. This is the **safe** use of that trigger: the workflow is actor-gated on `github.actor == 'dependabot[bot]'`, it does **not** check out PR head code, and the only command is `gh pr merge --auto --squash`. No untrusted code ever executes with secrets. Avoid adding any other `pull_request_target` workflow without the same hardening.
 
 ## Cross-references
 
