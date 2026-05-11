@@ -14,9 +14,14 @@ extract_url_for() {
 	local target=$1
 	local file=$2
 	case "$target" in
-	vercel) grep -oE 'https://[a-zA-Z0-9-]+\.vercel\.app[a-zA-Z0-9._/-]*' "$file" | head -1 ;;
-	fly) grep -oE 'https://[a-zA-Z0-9-]+\.fly\.dev[a-zA-Z0-9._/-]*' "$file" | head -1 ;;
-	railway) grep -oE 'https://[a-zA-Z0-9-]+\.up\.railway\.app[a-zA-Z0-9._/-]*' "$file" | head -1 ;;
+	# LHS character class allows dots in addition to alphanumerics + hyphens.
+	# Default Vercel/Fly/Railway subdomains are single-label (hyphenated, no
+	# internal dots), so this is defensive — covers possible future formats
+	# (e.g. scoped multi-label subdomains) without overmatching since the
+	# regex is still pinned to the product TLD.
+	vercel) grep -oE 'https://[a-zA-Z0-9.-]+\.vercel\.app[a-zA-Z0-9._/-]*' "$file" | head -1 ;;
+	fly) grep -oE 'https://[a-zA-Z0-9.-]+\.fly\.dev[a-zA-Z0-9._/-]*' "$file" | head -1 ;;
+	railway) grep -oE 'https://[a-zA-Z0-9.-]+\.up\.railway\.app[a-zA-Z0-9._/-]*' "$file" | head -1 ;;
 	esac
 }
 
