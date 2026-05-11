@@ -76,6 +76,11 @@ jobs:
       - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: ".go-version.effective"
+          # cache: true is intentionally left as-is (unlike ci-node/ci-python
+          # which need lockfile-aware cache:). setup-go handles missing
+          # go.sum gracefully — it just skips caching with a warning rather
+          # than hard-failing. Don't "fix" this by adding lockfile detection
+          # by analogy with #60/#63 — go's contract is different.
           cache: true
       - name: Run ci-go.sh per stack path
         env:
