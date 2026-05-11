@@ -38,7 +38,14 @@ jobs:
     needs: detect
     if: needs.detect.outputs.applies == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 20 min (not 15) for headroom on Fly Machines rollouts: image push
+    # to Fly's registry (60-90s) + machine restart (30-60s) + healthcheck
+    # stabilization (1-3 min) + `flyctl deploy --wait-timeout` default
+    # (10 min) can realistically land at 12-15 min. With concurrency
+    # `cancel-in-progress: false` (intentional, prevents deploy races),
+    # there's no recovery from a kill at 15 min — could leave the target
+    # in a half-deployed state. Tier 2 review N2 (PR #69).
+    timeout-minutes: 20
     outputs:
       preview-url: ${{ steps.deploy.outputs.preview-url }}
     steps:
