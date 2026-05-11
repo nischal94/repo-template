@@ -14,7 +14,14 @@ Plus the canonical branch ruleset (signed commits, PR review, no force-push, req
 ## Quick start
 
 ```bash
+# Public repo — works on any plan including Free
 gh repo create nischal94/<your-project> --template nischal94/repo-template --public
+
+# OR private repo — requires GitHub Pro+ (canonical ruleset needs Branch Rulesets API,
+# which GitHub gates on Pro+ for private repos). On Free, a private repo enrolls
+# but the ruleset apply returns 403 and the repo lands in state/configured-repos.json.skippedRepos.
+gh repo create nischal94/<your-project> --template nischal94/repo-template --private
+
 gh repo clone nischal94/<your-project> && cd <your-project>
 bash scripts/bootstrap.sh
 git push origin main
@@ -42,7 +49,9 @@ After your first push: add the new repo to `nischal94/.github`'s `SCAFFOLD_ALLOW
 | `ci-e2e.yml` | `playwright.config.*` or `cypress.config.*` present | `bash .github/scripts/ci-e2e.sh` |
 | `ci-docs.yml` | `mkdocs.yml`, `docusaurus.config.*`, or `docs/` dir present | `bash .github/scripts/ci-docs.sh` |
 
-Each workflow has a `detect` job that returns clean if its language doesn't apply — no spurious failures on mismatched repos. For monorepos, `.github/stacks.yml` overrides auto-detection.
+Each workflow has a `detect` job that returns clean if its language doesn't apply — no spurious failures on mismatched repos.
+
+**Monorepo support (full).** All 8 `ci-*.yml` workflows honor `.github/stacks.yml`'s `path:` field. When `stacks.yml` declares multiple paths for the same `kind:`, the `detect` job emits a JSON array of paths and the `ci` job iterates `cd $p && bash .github/scripts/ci-<lang>.sh` for each one, collecting per-path failures and surfacing them at the end. Constraints: one toolchain version per workflow (`setup-X` is job-level), `ci-sql` shares one Postgres service across paths, `ci-docker` overwrites `local/test:ci` per path but each scans before the next overwrite. See [`.github/stacks.yml.example`](.github/stacks.yml.example) for the schema and [the closed monorepo tracking issue](https://github.com/nischal94/repo-template/issues/55) for the design rationale.
 
 ### CD + release pipeline
 
@@ -65,8 +74,9 @@ These don't ship in the template — they get added by the scaffold PR after enr
 | `pin-actions.yml` | Verifies all actions are SHA-pinned |
 | `pr-title.yml` | Enforces Conventional Commits PR titles |
 | `license-check.yml` | License allowlist enforcement |
+| `scorecard.yml` | OpenSSF Scorecard weekly + on push to main (token-permissions, branch-protection, pinned-deps, etc.) |
 
-See [`nischal94/.github/docs/POLICIES.md`](https://github.com/nischal94/.github/blob/main/docs/POLICIES.md) for what each enforces.
+See [`nischal94/.github/docs/POLICIES.md`](https://github.com/nischal94/.github/blob/main/docs/POLICIES.md) for what each enforces — and for the [enrollment paths](https://github.com/nischal94/.github/blob/main/docs/POLICIES.md#project-enrollment-paths) explaining how a repo opts into Layer 1.
 
 ### Skeleton config files
 
@@ -83,6 +93,10 @@ Pre-configured for the common stacks:
 ### Doc stubs (`docs/`)
 
 - `ARCHITECTURE.md`, `RUNBOOK.md`, `THREAT_MODEL.md` — empty templates with section headers; fill in per project
+
+### AI assistance (`CLAUDE.md`)
+
+The template ships a project-scoped `CLAUDE.md` that Claude Code auto-loads in any derived repo. It documents the two-layer model, monorepo support table, merge mechanics (`gh-merge` + REST PUT), workflow hardening defaults, and the State A/B/C/D detection flow for "ship this to GitHub" prompts. You don't need to read it — Claude reads it for you. Open it once if you're curious about what's primed.
 
 ### Other
 
