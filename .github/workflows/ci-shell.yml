@@ -59,15 +59,56 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
+          # Need history back to the PR base for `git diff` in the
+          # "Compute changed shell files" step. fetch-depth: 0 is the
+          # conventional way to ensure the merge-base is reachable.
+          fetch-depth: 0
       - name: Install shfmt
         run: |
           go install mvdan.cc/sh/v3/cmd/shfmt@latest
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      # Compute the list of .sh files changed in this PR. On push events
+      # (no PR base SHA), CHANGED_SHELL_FILES_ALL stays empty and the script
+      # falls back to its full-tree scan — the baseline enforcement on main.
+      #
+      # Why this exists: previously, ci-shell.sh ran shfmt/shellcheck over
+      # `find . -name "*.sh"`, so a docs-only PR could fail because of
+      # pre-existing drift in an unrelated script (see PR #66 → #67).
+      - name: Compute changed shell files (PR scope)
+        id: changed
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # --diff-filter=ACMR: Added / Copied / Modified / Renamed. Deleted
+          # files don't need linting (they're gone), and Type-changed (T) /
+          # Unmerged (U) shouldn't reach this point.
+          #
+          # No `|| true` here on purpose. `git diff` exits 0 with empty
+          # stdout when the PR touches no .sh files (legitimate, common
+          # case) — that flows through correctly. The only ways it
+          # returns non-zero are real problems: unreachable BASE_SHA,
+          # corrupted history, broken fetch-depth assumption. Failing
+          # loudly in those cases is the whole point — swallowing them
+          # would mask drift on PRs whose gate silently no-op'd.
+          # (Tier 2 review I1, PR #68.)
+          changed=$(git diff --name-only --diff-filter=ACMR \
+            "$BASE_SHA" "$HEAD_SHA" -- '*.sh')
+          {
+            echo "files<<EOF"
+            echo "$changed"
+            echo "EOF"
+          } >>"$GITHUB_OUTPUT"
       - name: Run ci-shell.sh per stack path
         # Pass paths via env: rather than ${{ }} interpolation. Script-injection
-        # safety per PR #56 review lesson.
+        # safety per PR #56 review lesson. Same rule applies to
+        # CHANGED_SHELL_FILES_ALL — it's wired through env, never interpolated
+        # into the run: body.
         env:
           PATHS_JSON: ${{ needs.detect.outputs.paths }}
+          CHANGED_SHELL_FILES_ALL: ${{ steps.changed.outputs.files }}
         run: |
           set -uo pipefail
           mapfile -t PATHS < <(jq -r '.[]' <<<"$PATHS_JSON")
@@ -78,7 +119,19 @@ jobs:
           FAILED=()
           for p in "${PATHS[@]}"; do
             echo "::group::ci-shell.sh at $p"
-            if (cd "$p" && bash "$GITHUB_WORKSPACE/.github/scripts/ci-shell.sh"); then
+            # Re-scope the changed-files list to this stack path. The script
+            # itself runs with cwd=$p, so file paths must be relative to $p.
+            # On push events CHANGED_SHELL_FILES_ALL is empty and the env
+            # var we export is also empty → script falls back to full scan.
+            if [ -n "$CHANGED_SHELL_FILES_ALL" ] && [ "$p" != "." ]; then
+              scoped=$(echo "$CHANGED_SHELL_FILES_ALL" | awk -v prefix="$p/" '
+                index($0, prefix) == 1 { print substr($0, length(prefix) + 1) }
+              ')
+            else
+              scoped="$CHANGED_SHELL_FILES_ALL"
+            fi
+            if (cd "$p" && CHANGED_SHELL_FILES="$scoped" \
+                bash "$GITHUB_WORKSPACE/.github/scripts/ci-shell.sh"); then
               echo "::endgroup::"
             else
               echo "::endgroup::"
