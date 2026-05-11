@@ -59,11 +59,16 @@ jobs:
           persist-credentials: false
       - name: Run ci-docker.sh per stack path
         # ci-docker.sh builds an image tagged local/test:ci from the
-        # current working directory. With multiple stack paths, each
-        # build produces a separately-named image based on the path
-        # (slashes replaced with hyphens to be a valid Docker tag).
-        # ci-docker.sh handles this internally; the workflow only
-        # iterates paths.
+        # current working directory. In a monorepo, each iteration
+        # OVERWRITES the same local/test:ci tag — but because the
+        # build + trivy scan happen sequentially within each `cd $p`
+        # subshell, each path's image IS fully scanned before the
+        # next iteration overwrites the tag. Result: every Dockerfile
+        # gets a real scan, but you can't inspect images post-run
+        # since only the last one survives. That's fine for CI.
+        # If a future use case needs persistent per-path images
+        # (e.g. publishing to a registry), update ci-docker.sh to
+        # accept a tag prefix and iterate the tag here.
         env:
           PATHS_JSON: ${{ needs.detect.outputs.paths }}
         run: |
