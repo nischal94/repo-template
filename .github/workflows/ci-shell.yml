@@ -14,7 +14,7 @@ jobs:
     outputs:
       applies: ${{ steps.check.outputs.applies }}
     steps:
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       - id: check
         run: |
           # Per spec §4.4: shell triggers only when shell is the PRIMARY language
@@ -34,14 +34,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
         with:
           egress-policy: block
           allowed-endpoints: >
             github.com:443
             api.github.com:443
             objects.githubusercontent.com:443
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       - name: Install shfmt
         run: |
           go install mvdan.cc/sh/v3/cmd/shfmt@latest
