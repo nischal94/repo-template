@@ -13,20 +13,25 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       applies: ${{ steps.check.outputs.applies }}
+      paths: ${{ steps.check.outputs.paths }}
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
       - id: check
         run: |
+          set -euo pipefail
           if [ -f .github/stacks.yml ]; then
-            if yq '.stacks[] | select(.kind == "python")' .github/stacks.yml > /dev/null; then
-              echo "applies=true" >> "$GITHUB_OUTPUT"
-            else
+            paths_json=$(yq -o=json -I=0 '[.stacks[] | select(.kind == "python") | (.path // ".") | select(. != "")] | unique' .github/stacks.yml)
+            if [ "$paths_json" = "[]" ]; then
               echo "applies=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "applies=true" >> "$GITHUB_OUTPUT"
+              echo "paths=$paths_json" >> "$GITHUB_OUTPUT"
             fi
           elif [ -f pyproject.toml ] || compgen -G "requirements*.txt" > /dev/null; then
             echo "applies=true" >> "$GITHUB_OUTPUT"
+            echo 'paths=["."]' >> "$GITHUB_OUTPUT"
           else
             echo "applies=false" >> "$GITHUB_OUTPUT"
           fi
@@ -48,9 +53,74 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
+      # In monorepo mode: .python-version may live at the repo root OR at the
+      # first stack path. setup-python is job-level. Same workspace-relative
+      # pattern as ci-node/ci-go (PR #56's path.join finding).
+      #
+      # Also: cache: pip hard-fails when no dependency file exists, same bug
+      # class as T5-4 (ci-node cache: npm). Detect a dependency file in the
+      # first path; pass empty string to cache: when absent (skips cache).
+      - id: pyvers
+        env:
+          PATHS_JSON: ${{ needs.detect.outputs.paths }}
+        run: |
+          set -euo pipefail
+          FIRST_PATH=$(jq -r '.[0] // "."' <<<"$PATHS_JSON")
+          EFFECTIVE_PYVERS="$GITHUB_WORKSPACE/.python-version.effective"
+          if [ -f .python-version ]; then
+            cp .python-version "$EFFECTIVE_PYVERS"
+          elif [ -f "$FIRST_PATH/.python-version" ]; then
+            cp "$FIRST_PATH/.python-version" "$EFFECTIVE_PYVERS"
+          else
+            echo "3.12" > "$EFFECTIVE_PYVERS"
+          fi
+          # cache: pip needs a dependency file. Detect in first path.
+          # Also emit cache-dependency-path matching the actual file so
+          # setup-python's hash is stable. Tier 1 review: previous version
+          # gated `cache: pip` on first-path detection but didn't set
+          # cache-dependency-path, causing setup-python to default-glob
+          # the whole workspace — inconsistent with how #56/#63 handle it.
+          if [ -f "$FIRST_PATH/pyproject.toml" ]; then
+            echo "cache=pip" >> "$GITHUB_OUTPUT"
+            echo "cache_dep_path=$FIRST_PATH/pyproject.toml" >> "$GITHUB_OUTPUT"
+          elif compgen -G "$FIRST_PATH/requirements*.txt" > /dev/null; then
+            # First match wins. Real projects rarely have multiple
+            # requirements*.txt at the same path; if they do, the
+            # hash key still covers the directory implicitly.
+            first_req=$(compgen -G "$FIRST_PATH/requirements*.txt" | head -1)
+            echo "cache=pip" >> "$GITHUB_OUTPUT"
+            echo "cache_dep_path=$first_req" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache=" >> "$GITHUB_OUTPUT"
+            echo "cache_dep_path=" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version-file: ".python-version"
-          cache: pip
-      - name: Run ci-python.sh
-        run: bash .github/scripts/ci-python.sh
+          python-version-file: ".python-version.effective"
+          cache: ${{ steps.pyvers.outputs.cache }}
+          cache-dependency-path: ${{ steps.pyvers.outputs.cache_dep_path }}
+      - name: Run ci-python.sh per stack path
+        env:
+          PATHS_JSON: ${{ needs.detect.outputs.paths }}
+        run: |
+          set -uo pipefail
+          mapfile -t PATHS < <(jq -r '.[]' <<<"$PATHS_JSON")
+          if [ "${#PATHS[@]}" -eq 0 ]; then
+            echo "::error::ci-python: paths output was empty"
+            exit 1
+          fi
+          FAILED=()
+          for p in "${PATHS[@]}"; do
+            echo "::group::ci-python.sh at $p"
+            if (cd "$p" && bash "$GITHUB_WORKSPACE/.github/scripts/ci-python.sh"); then
+              echo "::endgroup::"
+            else
+              echo "::endgroup::"
+              echo "::error::ci-python.sh failed at path: $p"
+              FAILED+=("$p")
+            fi
+          done
+          if [ "${#FAILED[@]}" -gt 0 ]; then
+            echo "::error::ci-python failed at ${#FAILED[@]} path(s): ${FAILED[*]}"
+            exit 1
+          fi
