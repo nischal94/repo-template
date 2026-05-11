@@ -17,7 +17,7 @@ LICENSE=${LICENSE:-MIT}
 # Initialize toolchain.
 case "$LANG" in
 node) npm init -y >/dev/null ;;
-python) test -f pyproject.toml || python -m venv .venv && pip install uv && uv init . ;;
+python) test -f pyproject.toml || { python -m venv .venv && pip install uv && uv init .; } ;;
 go) test -f go.mod || go mod init "github.com/nischal94/$PROJECT_NAME" ;;
 shell) echo "Shell project; no toolchain init." ;;
 *) echo "Unknown lang; skipping toolchain init." ;;
@@ -43,7 +43,7 @@ EOF
 
 case "$LANG" in
 node)
-	cat >>Makefile <<'EOF'
+  cat >>Makefile <<'EOF'
 install:
 	npm install
 
@@ -58,9 +58,9 @@ build:
 
 ci: install lint test build
 EOF
-	;;
+  ;;
 python)
-	cat >>Makefile <<'EOF'
+  cat >>Makefile <<'EOF'
 install:
 	pip install -e .[dev,test]
 
@@ -75,9 +75,9 @@ build:
 
 ci: install lint test build
 EOF
-	;;
+  ;;
 go)
-	cat >>Makefile <<'EOF'
+  cat >>Makefile <<'EOF'
 install:
 	go mod download
 
@@ -92,9 +92,9 @@ build:
 
 ci: install lint test build
 EOF
-	;;
+  ;;
 *)
-	cat >>Makefile <<'EOF'
+  cat >>Makefile <<'EOF'
 install:
 	@echo 'No install command configured.'
 
@@ -109,7 +109,7 @@ build:
 
 ci: install lint test build
 EOF
-	;;
+  ;;
 esac
 
 echo "==> Bootstrap complete. Initial commit:"
