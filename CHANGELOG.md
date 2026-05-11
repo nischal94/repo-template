@@ -6,6 +6,9 @@ When you create a repo from this template, **note the date** below — it tells 
 
 ## [Unreleased]
 
+### Changed
+- Trivial test PR verifying the post-audit merge flow works end-to-end without `--admin`.
+
 ## [2026-04-19] — Initial baseline
 
 ### Added
