@@ -85,6 +85,34 @@ a. **`[ASK]` Visibility — never default to public.**
    `.env` files, deploy tokens, API keys, etc.) before proceeding.
    Per the user's "Public repo safety" override in `~/.claude/CLAUDE.md`.
 
+   **Critical platform constraint — explain this to the user
+   before they pick.** The canonical ruleset (which enforces the 7
+   required status checks on `main`) is applied via the GitHub
+   **Rulesets API**, which has a plan-level constraint:
+
+   - **Public repos**: rulesets work on any GitHub plan (including
+     Free). Platform works as designed.
+   - **Private repos on GitHub Free**: rulesets API returns HTTP 403
+     "Upgrade to GitHub Pro or make this repository public to enable
+     this feature." `enforce-on-poll` will fail to apply the canonical
+     ruleset; the repo will be scaffolded with Layer 1 workflows but
+     `main` will have NO enforced branch protection. T5 dogfood
+     confirmed this constraint live (2026-05-11).
+   - **Private repos on GitHub Pro / Team / Enterprise**: rulesets
+     work. Platform works as designed.
+
+   What to do at the visibility prompt:
+   1. If the user picks **public** → proceed.
+   2. If the user picks **private** → ask whether their account is
+      on Free or Pro+. If Free, warn that the canonical ruleset will
+      not apply; offer the user three options:
+      - Make the repo public (recommended for OSS / personal projects).
+      - Upgrade to GitHub Pro (~$4/mo at time of writing).
+      - Proceed with private + free, accepting that this repo runs
+        without enforced ruleset until they upgrade. The 7 Layer 1
+        workflows still run, but nothing prevents merging when they
+        fail. Document this trade-off in the repo's README.
+
 b. **`[ASK]` Overlay template files into the existing folder.**
    The local-first overlay is currently a one-liner you run from inside
    the project folder. It fetches files from
@@ -413,10 +441,27 @@ first CI run.
 ## Stack detection (Layer 2 `ci-*.yml` files)
 
 Each `ci-*.yml` has a `detect` job that exits clean if the language
-doesn't apply (no `package.json` → `ci-node` skips). For monorepos,
-copy `.github/stacks.yml.example` to `.github/stacks.yml` and declare
-per-path stacks explicitly. `scripts/bootstrap.sh` prunes unused
-profiles at init time based on user's primary language.
+doesn't apply (no `package.json` → `ci-node` skips). `scripts/bootstrap.sh`
+prunes unused profiles at init time based on user's primary language.
+
+**⚠ stacks.yml monorepo support is currently BROKEN.** T3 dogfood
+(2026-05-11, see [`repo-template` issue #55](https://github.com/nischal94/repo-template/issues/55))
+verified that `.github/stacks.yml`'s `path:` field is parsed by the
+detect step but NEVER consumed downstream — the ci job always runs
+from the repo root regardless. End-to-end:
+- Monorepo with `services/web/package.json`: ci-node.yml detects
+  `kind: node`, ci-node.sh runs `npm i` at the root, fails because
+  there's no package.json there.
+- Same for python, go, sql.
+
+**Until issue #55 lands**, do NOT steer the user toward monorepo
+setups. If the user has a multi-stack repo already:
+1. Recommend they split into separate single-stack repos (each
+   enrolled separately).
+2. If they insist on monorepo, warn that ci-* workflows will need
+   per-project customization (manual `working-directory:` edits or
+   bespoke scripts per service). The template's automated monorepo
+   path doesn't exist yet.
 
 **Has bootstrap.sh already run on this repo?** Check signals:
 - Presence of `Makefile` (bootstrap.sh generates it) → likely yes.
