@@ -1,8 +1,13 @@
 name: gitleaks
+# pull_request only — no `push: branches: [main]` trigger. The ruleset
+# forbids direct pushes to main except by bypass actors (App + Dependabot),
+# so every code change reaches main via a merged PR that already ran
+# gitleaks. The dropped push trigger eliminated ~2 redundant runs per
+# merge. App/Dependabot commits to main (e.g. state-file updates from
+# enforce-on-poll) are out of scope for secret scanning — they touch
+# data files, not code.
 on:
   pull_request:
-  push:
-    branches: [main]
 permissions:
   contents: read
   pull-requests: read

@@ -1,8 +1,13 @@
 name: license-check
+# pull_request only — no `push: branches: [main]` trigger. The ruleset
+# forbids direct pushes to main except by bypass actors (App + Dependabot),
+# so every code change reaches main via a merged PR that already ran
+# license-check. The dropped push trigger eliminated ~2 redundant runs
+# per merge. App/Dependabot commits to main (e.g. state-file updates
+# from enforce-on-poll) don't touch dependency manifests, so they're
+# out of scope for license scanning.
 on:
   pull_request:
-  push:
-    branches: [main]
 permissions:
   contents: read
 concurrency:
