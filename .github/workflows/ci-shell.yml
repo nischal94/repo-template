@@ -64,8 +64,16 @@ jobs:
           # conventional way to ensure the merge-base is reachable.
           fetch-depth: 0
       - name: Install shfmt
+        # Pin to a specific version, not @latest. `@latest` resolves to
+        # whatever upstream just shipped — a compromised upstream release
+        # would run inside this workflow before anyone noticed. Pinned
+        # versions are reproducible and auditable; bump deliberately.
+        # `go install`'s @<version> form is resolved by proxy.golang.org
+        # (already in the harden-runner allowlist for this job), so the
+        # supply-chain trust boundary is module-version-pinned + GOPROXY
+        # checksum-verified.
         run: |
-          go install mvdan.cc/sh/v3/cmd/shfmt@latest
+          go install mvdan.cc/sh/v3/cmd/shfmt@v3.13.1
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       # Compute the list of .sh files changed in this PR. On push events
       # (no PR base SHA), CHANGED_SHELL_FILES_ALL stays empty and the script
