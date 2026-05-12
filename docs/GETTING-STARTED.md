@@ -77,18 +77,16 @@ git push origin main
 
 ### 4. Install the `nischal94-policy` App on the new repo
 
-**This step is the gate for everything Layer 1 does.** The App's `enforce-on-poll` workflow only sees repos it's installed on — if you skip this step, the next two steps silently no-op and your repo stays without canonical ruleset protection indefinitely.
+**This step is the gate for everything Layer 1 does.** The App's `enforce-on-poll` workflow only sees repos it's installed on — if you skip this step, step 5 (allowlist edit) won't trigger a scaffold and your repo stays without canonical ruleset protection indefinitely.
 
-Visit https://github.com/apps/nischal94-policy → **Configure** → select your new repo → **Save**. (If "Only select repositories" is chosen on the App, add your new repo to that list. If "All repositories" is chosen, you're already covered — but verify the new repo appears under the App's installation list before continuing.)
+Visit https://github.com/apps/nischal94-policy → **Configure** → select your new repo → **Save**. (If "Only select repositories" is chosen on the App, add your new repo to that list. If "All repositories" is chosen, you're already covered.)
 
-Verify:
+Verify (UI):
 
-```bash
-gh api /repos/nischal94/<your-project>/installation --jq '.app_slug'
-# Should print: nischal94-policy
-```
+1. Open https://github.com/settings/installations and click **Configure** next to `nischal94-policy`.
+2. Under **Repository access**, confirm your new repo appears in the selected list (or "All repositories" is selected).
 
-A 404 means the App isn't installed. Re-do the Configure step.
+The endpoint `GET /repos/{owner}/{repo}/installation` would also confirm this programmatically, but it requires App-JWT auth — a personal access token (the default `gh auth login` token) gets a 401, NOT a 404. So `gh api` is misleading here; rely on the UI check.
 
 ### 5. Enroll the repo (one-line edit on `nischal94/.github`)
 
@@ -100,7 +98,7 @@ Open [`.github/workflows/scaffold-on-poll.yml`](https://github.com/nischal94/.gi
 
 Within ~15 minutes (the `enforce-on-poll` cron cadence), the App opens a scaffold PR on your new repo with the 8 Layer 1 workflows + the `.scaffolded-by-nischal94-policy` marker file. Merge it. On the next 15-minute cron tick, the canonical ruleset auto-applies. **No manual branch protection setup required.**
 
-If 30 minutes pass with no scaffold PR appearing, the most likely cause is step 4 didn't complete — re-run the `gh api /repos/<owner>/<repo>/installation` check above. The second-most-likely cause is `SCAFFOLD_ALLOWLIST` didn't pick up the change; verify the merged commit on `nischal94/.github` actually contains your repo's name.
+If 30 minutes pass with no scaffold PR appearing, the most likely cause is step 4 didn't complete — re-check the UI verification at https://github.com/settings/installations. The second-most-likely cause is `SCAFFOLD_ALLOWLIST` didn't pick up the change; verify the merged commit on `nischal94/.github` actually contains your repo's name. The third (lower likelihood) is that `enforce-on-poll`'s cron has been delayed beyond the 15-min nominal cadence (GitHub-side delays of 30-60 min are common during high load) — check the Actions tab on `nischal94/.github` to see when it last ran.
 
 ### 7. Add per-project secrets
 
