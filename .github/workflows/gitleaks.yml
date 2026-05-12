@@ -1,11 +1,13 @@
 name: gitleaks
-# pull_request only — no `push: branches: [main]` trigger. The ruleset
-# forbids direct pushes to main except by bypass actors (App + Dependabot),
-# so every code change reaches main via a merged PR that already ran
-# gitleaks. The dropped push trigger eliminated ~2 redundant runs per
-# merge. App/Dependabot commits to main (e.g. state-file updates from
-# enforce-on-poll) are out of scope for secret scanning — they touch
-# data files, not code.
+# pull_request only — no `push: branches: [main]` trigger. The ruleset's
+# `pull_request` rule blocks direct pushes to main. The only bypass
+# actor is the policy App (state-file commits via Contents API); it
+# writes data only, no code/manifests — out of scope for secret
+# scanning. Dependabot is NOT a bypass actor: its auto-merges go
+# through the standard PR flow and gitleaks fires at PR time before
+# the auto-merge can complete. Dropping the post-merge re-run
+# eliminated ~2 redundant runs per merged PR. (Tier 2 review NIT 1
+# on PR #73.)
 on:
   pull_request:
 permissions:
