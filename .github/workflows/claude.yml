@@ -21,11 +21,29 @@ on:
 
 jobs:
   claude:
+    # Trust boundary: this workflow grants contents/pull-requests/issues/
+    # id-token: write on a public repo, triggered by `@claude` mentions in
+    # user-controlled bodies. WITHOUT the author_association gate, any
+    # GitHub user can comment `@claude` on an issue/PR and the workflow
+    # would fire with the workflow's full permissions. The anthropics
+    # action has its own auth/quota controls, but they're at API-call
+    # time — by that point the workflow's GITHUB_TOKEN already exists.
+    #
+    # Gate on author_association: only OWNER or COLLABORATOR can trigger.
+    # OWNER covers the solo-account state today. COLLABORATOR covers the
+    # later "I added a second trusted person" state without a doc update.
+    # NEITHER covers public commenters (CONTRIBUTOR, FIRST_TIME_CONTRIBUTOR,
+    # MANNEQUIN, MEMBER, NONE).
+    #
+    # author_association lives on a different field per event:
+    #   issue_comment / pull_request_review_comment → .comment.author_association
+    #   pull_request_review                         → .review.author_association
+    #   issues                                      → .issue.author_association
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'COLLABORATOR')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'COLLABORATOR')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') && (github.event.review.author_association == 'OWNER' || github.event.review.author_association == 'COLLABORATOR')) ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) && (github.event.issue.author_association == 'OWNER' || github.event.issue.author_association == 'COLLABORATOR'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
