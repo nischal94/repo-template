@@ -75,13 +75,32 @@ It asks for project name, primary language (`node|python|go|shell|other`), and l
 git push origin main
 ```
 
-### 4. Enroll in Layer 1 (one line edit on `nischal94/.github`)
+### 4. Install the `nischal94-policy` App on the new repo
+
+**This step is the gate for everything Layer 1 does.** The App's `enforce-on-poll` workflow only sees repos it's installed on — if you skip this step, step 5 (allowlist edit) won't trigger a scaffold and your repo stays without canonical ruleset protection indefinitely.
+
+Visit https://github.com/apps/nischal94-policy → **Configure** → select your new repo → **Save**. (If "Only select repositories" is chosen on the App, add your new repo to that list. If "All repositories" is chosen, you're already covered.)
+
+Verify (UI):
+
+1. Open https://github.com/settings/installations and click **Configure** next to `nischal94-policy`.
+2. Under **Repository access**, confirm your new repo appears in the selected list (or "All repositories" is selected).
+
+The endpoint `GET /repos/{owner}/{repo}/installation` would also confirm this programmatically, but it requires App-JWT auth — a personal access token (the default `gh auth login` token) gets a 401, NOT a 404. So `gh api` is misleading here; rely on the UI check.
+
+### 5. Enroll the repo (one-line edit on `nischal94/.github`)
+
+Now that the App can see your repo, allow-list it for scaffolding.
 
 Open [`.github/workflows/scaffold-on-poll.yml`](https://github.com/nischal94/.github/blob/main/.github/workflows/scaffold-on-poll.yml), find the `SCAFFOLD_ALLOWLIST=""` line, add your repo's full name (space-separated), open a PR, merge.
 
-Within ~15 minutes, the App opens a scaffold PR on your new repo with the 8 Layer 1 workflows + the `.scaffolded-by-nischal94-policy` marker file. Merge it. On the next 15-minute cron tick, the canonical ruleset auto-applies. **No manual branch protection setup required.**
+### 6. Wait for the scaffold + ruleset to land
 
-### 5. Add per-project secrets
+Within ~15 minutes (the `enforce-on-poll` cron cadence), the App opens a scaffold PR on your new repo with the 8 Layer 1 workflows + the `.scaffolded-by-nischal94-policy` marker file. Merge it. On the next 15-minute cron tick, the canonical ruleset auto-applies. **No manual branch protection setup required.**
+
+If 30 minutes pass with no scaffold PR appearing, the most likely cause is step 4 didn't complete — re-check the UI verification at https://github.com/settings/installations. The second-most-likely cause is `SCAFFOLD_ALLOWLIST` didn't pick up the change; verify the merged commit on `nischal94/.github` actually contains your repo's name. The third (lower likelihood) is that `enforce-on-poll`'s cron has been delayed beyond the 15-min nominal cadence (GitHub-side delays of 30-60 min are common during high load) — check the Actions tab on `nischal94/.github` to see when it last ran.
+
+### 7. Add per-project secrets
 
 | Secret | Why | Set with |
 |---|---|---|
@@ -90,7 +109,7 @@ Within ~15 minutes, the App opens a scaffold PR on your new repo with the 8 Laye
 
 Without these the relevant workflows still exist but no-op — `claude.yml` won't fire on `@claude`, `cd-deploy.yml` won't deploy.
 
-### 6. Add your code
+### 8. Add your code
 
 You have a secure, ruleset-protected, CI-wired foundation. Add source.
 
@@ -108,7 +127,7 @@ You have a secure, ruleset-protected, CI-wired foundation. Add source.
 
 **Continuously**: Dependabot opens grouped weekly PRs for `gh-actions` plus your stack's ecosystem (after you uncomment the relevant block in `dependabot.yml`). Patch + dev-minor Dependabot PRs auto-merge once Layer 1 checks pass.
 
-**On `@claude` mentions** (after step 5 secret): AI review fires from `claude.yml`.
+**On `@claude` mentions** (after step 7 `ANTHROPIC_API_KEY` secret is set): AI review fires from `claude.yml`.
 
 ---
 
