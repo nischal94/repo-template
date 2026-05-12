@@ -24,19 +24,34 @@ jobs:
         with:
           persist-credentials: false
       - name: Install osv-scanner
+        # Bumped 2.0.2 → 2.3.8 (13 months of vulnerability-database updates
+        # were missing). The SHA-256 below is the published value in the
+        # upstream `osv-scanner_SHA256SUMS` file at
+        # https://github.com/google/osv-scanner/releases/download/v2.3.8/osv-scanner_SHA256SUMS
+        # If/when bumping, update both OSV_VERSION and OSV_SHA256 — and
+        # cross-verify the new SHA against the upstream SHA256SUMS file
+        # before merging. `sha256sum -c` aborts the workflow on mismatch,
+        # so a tampered release asset (or partial download) fails loudly
+        # rather than running arbitrary code with security-events: write.
         run: |
           set -euo pipefail
-          OSV_VERSION="2.0.2"
+          OSV_VERSION="2.3.8"
+          OSV_SHA256="bc98e15319ed0d515e3f9235287ba53cdc5535d576d24fd573978ecfe9ab92dc"
           curl -fsSL "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64" -o /usr/local/bin/osv-scanner
+          echo "${OSV_SHA256}  /usr/local/bin/osv-scanner" | sha256sum -c -
           chmod +x /usr/local/bin/osv-scanner
           osv-scanner --version
       - name: Run osv-scanner
         run: |
           set -euo pipefail
-          # osv-scanner v2 exit codes (verified empirically against v2.0.2):
+          # osv-scanner v2 exit codes (verified empirically against v2.0.2;
+          # v2.3.8 retains the same contract — v2.1.0 added a dedicated
+          # exit code for invalid configuration files which falls into our
+          # `*` catch-all and fails loudly with the exit code).
           #   0   = scanned, no vulnerabilities found
           #   1   = vulnerabilities found
           #   128 = no package sources found in the scanned dir
+          #   *   = other (e.g. invalid config) — fail loudly with the code.
           # The .github repo (and other docs/yaml-only repos) will always
           # exit 128 because they have no manifests. Treat 128 as success.
           set +e
