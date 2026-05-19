@@ -1,3 +1,30 @@
+> ## ⚠️ Decommissioning notice — 2026-05-19
+>
+> This template is **partially decommissioned**:
+>
+> - **The Layer 1 auto-scaffolding is gone.** The `nischal94-policy`
+>   GitHub App has been uninstalled. New repos created from this template
+>   will NOT get Layer 1 workflows auto-scaffolded later by an App. You
+>   must add them manually if you want them.
+> - **The canonical ruleset is gone.** The "Use this template" flow no
+>   longer results in branch protection being applied automatically. Set
+>   branch protection per-repo in GitHub UI if you want it.
+> - **Layer 2 stack-specific workflows still ship with the template.**
+>   The 21 workflow files in `.github/workflows/` are still present and
+>   will be copied into any repo created from this template. Most aren't
+>   needed for any given project; **delete the ones you don't need after
+>   `gh repo create --template`**.
+>
+> **For a slimmer baseline**, the 4 workflows worth keeping by default
+> are: `actionlint.yml`, `gitleaks.yml`, `dependency-review.yml`,
+> `pr-title.yml`. Everything else (`ci-*.yml`, `cd-deploy.yml`,
+> `release.yml`, `sbom-on-release.yml`, etc.) is opt-in based on what
+> your project actually uses.
+>
+> **Why decommissioned:** see [`nischal94/.github`'s README](https://github.com/nischal94/.github#%EF%B8%8F-decommissioned-2026-05-19).
+
+---
+
 # repo-template
 
 Template repository for new projects on `github.com/nischal94`. Click **Use this template** → **Create a new repository** to start with the full Layer 1 + Layer 2 baseline pre-installed.
